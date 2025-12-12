@@ -86,6 +86,8 @@ curl http://localhost:8088/v1/chat/completions \
 
 ### OpenAI：工具调用
 
+说明：代理只透传 `tools/tool_calls`，不会替你执行工具；工具需要客户端自己执行后再用 `role: "tool"` 回传。
+
 1) 第一次请求：带 `tools`
 
 ```bash
@@ -150,6 +152,71 @@ curl http://localhost:8088/v1/messages \
   -d '{"model":"claude-opus-4-5-thinking","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
 ```
 
+### Anthropic：工具调用（完整示例，代理只透传）
+
+说明：
+- 支持 Anthropic 的 `tool_use/tool_result` 流程（函数工具）。
+- Anthropic 内置工具（例如 `web_search_...` / `computer_...`）会被服务端跳过，只透传 `name + input_schema` 这种函数工具。
+
+1) 第一次请求：带 `tools`
+
+```bash
+curl http://localhost:8088/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: sk-your-api-key" \
+  -d '{
+    "model": "claude-opus-4-5-thinking",
+    "max_tokens": 256,
+    "messages": [
+      {"role":"user","content":"用工具查一下北京时间，然后用一句话回答。"}
+    ],
+    "tools": [
+      {
+        "name": "get_time",
+        "description": "Get current time for a timezone",
+        "input_schema": {
+          "type": "object",
+          "properties": { "timezone": { "type": "string" } },
+          "required": ["timezone"]
+        }
+      }
+    ],
+    "tool_choice": { "type": "auto" }
+  }'
+```
+
+2) 响应会包含 `tool_use`（示例）：
+
+```json
+{
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_xxx",
+      "name": "get_time",
+      "input": { "timezone": "Asia/Shanghai" }
+    }
+  ]
+}
+```
+
+3) 客户端执行工具后回传（二次请求）：
+
+```bash
+curl http://localhost:8088/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: sk-your-api-key" \
+  -d '{
+    "model": "claude-opus-4-5-thinking",
+    "max_tokens": 256,
+    "messages": [
+      {"role":"user","content":"用工具查一下北京时间，然后用一句话回答。"},
+      {"role":"assistant","content":[{"type":"tool_use","id":"toolu_xxx","name":"get_time","input":{"timezone":"Asia/Shanghai"}}]},
+      {"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_xxx","content":"当前时间 (Asia/Shanghai CST): 2025-12-12 23:59:59\\nUTC偏移: +8:00"}]}
+    ]
+  }'
+```
+
 ### 模型列表
 
 ```bash
@@ -205,4 +272,3 @@ antigravity-proxy/
 ## License
 
 MIT
-
