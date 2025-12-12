@@ -40,7 +40,7 @@ docker compose up -d --build
 - 管理面板：`http://localhost:8088`
 - API Base：`http://localhost:8088/v1`
 
-## 先做：添加账号 & 创建 API Key
+## 添加账号 & 创建 API Key
 
 ### 1) 登录管理面板
 
@@ -84,9 +84,7 @@ curl http://localhost:8088/v1/chat/completions \
   -d '{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-### OpenAI：工具调用（完整示例，代理只透传）
-
-本项目不会替你执行工具；会把上游返回的 `tool_calls` 原样返回给客户端，客户端执行后再把 `role:"tool"` 结果回传。
+### OpenAI：工具调用
 
 1) 第一次请求：带 `tools`
 
@@ -184,7 +182,7 @@ Anthropic extended thinking 要求历史 `thinking` 块带 `signature`。由于�
 - `claude-sonnet-4-5-thinking`
 - `gpt-oss-120b-medium`
 
-## 项目结构（架构树）
+## 项目结构
 
 ```text
 antigravity-proxy/
