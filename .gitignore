@@ -16,9 +16,8 @@ yarn-error.log*
 pnpm-debug.log*
 
 # builds
-frontend/dist/
+# (frontend/dist is committed to make first `npm start` fast; rebuild with `npm run -w frontend build` when changing UI)
 
 # local caches
 .npm-cache/
 .cache/
-

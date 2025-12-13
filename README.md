@@ -33,6 +33,7 @@ npm start
 ```
 
 首次运行会自动（**只执行一次**）安装依赖（npm workspaces：前端+后端）并构建前端（可能需要几分钟）；之后再次启动通常会快很多。
+为了让首次启动更快，本仓库默认提交了 `frontend/dist`（预构建管理面板），因此大多数情况下首次 `npm start` 只需要安装后端依赖即可。
 
 ### 方式 B：Docker 一条命令（部署用）
 
@@ -282,6 +283,7 @@ antigravity-proxy/
 | `HOST` | `0.0.0.0` | 监听地址（`npm start` 用） |
 | `DB_PATH` | `../data/database.sqlite` | SQLite 路径（`npm start` 默认；Docker 固定 `/app/data/database.sqlite`） |
 | `NPM_REGISTRY` | (空) | 仅 `npm start`：自定义 npm registry（网络慢时可用镜像） |
+| `AGP_FORCE_BUILD` | `false` | `npm start` 强制重新安装前端依赖并重建 `frontend/dist` |
 | `ADMIN_PASSWORD` | `admin123` | 管理面板密码 |
 | `JWT_SECRET` | `antigravity-proxy-secret-key-2024` | 管理 JWT 密钥 |
 | `ADMIN_PASSWORD_BEARER_COMPAT` | `true` | 兼容 `Authorization: Bearer <ADMIN_PASSWORD>`（建议生产关闭） |

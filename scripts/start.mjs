@@ -75,19 +75,30 @@ async function ensureDeps(baseEnv) {
     return;
   }
 
-  log('Installing deps once (npm workspaces: frontend + backend; first run may take a few minutes)');
+  const distIndex = join(frontendDir, 'dist', 'index.html');
+  const hasPrebuiltFrontend = existsSync(distIndex);
+  const forceBuild = baseEnv.AGP_FORCE_BUILD === '1' || baseEnv.AGP_FORCE_BUILD === 'true';
+
+  if (hasPrebuiltFrontend && !forceBuild) {
+    log('Installing backend deps only (prebuilt frontend detected)');
+    await runNpm([...npmInstallArgs, '--workspace', 'backend'], { cwd: rootDir, env: npmEnv });
+    return;
+  }
+
+  log('Installing deps (npm workspaces: frontend + backend; first run may take a few minutes)');
   await runNpm(npmInstallArgs, { cwd: rootDir, env: npmEnv });
 }
 
 async function ensureFrontendBuild(baseEnv) {
   const distIndex = join(frontendDir, 'dist', 'index.html');
+  const forceBuild = baseEnv.AGP_FORCE_BUILD === '1' || baseEnv.AGP_FORCE_BUILD === 'true';
   if (baseEnv.AGP_SKIP_BUILD === '1' || baseEnv.AGP_SKIP_BUILD === 'true') {
     log('Skip frontend build (AGP_SKIP_BUILD set)');
     return;
   }
-  if (!existsSync(distIndex)) {
+  if (forceBuild || !existsSync(distIndex)) {
     log('Building frontend (vite build)');
-    await runNpm(['--workspace', 'frontend', 'run', 'build'], {
+    await runNpm(['run', '--workspace', 'frontend', 'build'], {
       cwd: rootDir,
       env: {
         ...baseEnv,
