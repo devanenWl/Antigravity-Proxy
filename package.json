@@ -2,8 +2,11 @@
   "name": "antigravity-proxy-monolith",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "start": "node scripts/start.mjs"
   }
 }
-

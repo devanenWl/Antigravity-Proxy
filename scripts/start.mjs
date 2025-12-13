@@ -69,18 +69,14 @@ async function ensureDeps(baseEnv) {
     log('Skip deps install (AGP_SKIP_INSTALL set)');
     return;
   }
-  if (!existsSync(join(frontendDir, 'node_modules'))) {
-    log('Installing frontend deps (first run may take a few minutes)');
-    await runNpm(npmInstallArgs, { cwd: frontendDir, env: npmEnv });
-  } else {
-    log('Frontend deps OK');
+
+  if (existsSync(join(rootDir, 'node_modules'))) {
+    log('Deps OK');
+    return;
   }
-  if (!existsSync(join(backendDir, 'node_modules'))) {
-    log('Installing backend deps (includes native modules like better-sqlite3)');
-    await runNpm(npmInstallArgs, { cwd: backendDir, env: npmEnv });
-  } else {
-    log('Backend deps OK');
-  }
+
+  log('Installing deps once (npm workspaces: frontend + backend; first run may take a few minutes)');
+  await runNpm(npmInstallArgs, { cwd: rootDir, env: npmEnv });
 }
 
 async function ensureFrontendBuild(baseEnv) {
@@ -91,8 +87,8 @@ async function ensureFrontendBuild(baseEnv) {
   }
   if (!existsSync(distIndex)) {
     log('Building frontend (vite build)');
-    await runNpm(['run', 'build'], {
-      cwd: frontendDir,
+    await runNpm(['--workspace', 'frontend', 'run', 'build'], {
+      cwd: rootDir,
       env: {
         ...baseEnv,
         npm_config_cache: join(rootDir, '.npm-cache'),
