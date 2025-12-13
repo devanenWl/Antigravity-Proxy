@@ -1,6 +1,6 @@
 # Antigravity Proxy
 
-OpenAI / Anthropic 兼容的 Antigravity 反代网关（账号池 + Web 管理面板），支持流式与多模态。
+OpenAI / Anthropic 兼容的 Antigravity 反代网关（账号池 + Web 管理面板），支持流式、多模态与工具调用。
 
 ## 快速启动
 
