@@ -58,8 +58,6 @@ export function extractLocation(toolCall) {
  * 获取天气信息 (使用 wttr.in)
  */
 export async function getWeather(location) {
-    console.log('[Weather] Getting weather for:', location);
-
     try {
         const url = `https://wttr.in/${encodeURIComponent(location)}?format=j1`;
         const response = await fetch(url, {
@@ -94,11 +92,8 @@ export async function getWeather(location) {
             localTime: current.localObsDateTime || new Date().toISOString()
         };
 
-        console.log('[Weather] Got weather:', weather.description, weather.temperature + '°C');
-
         return { success: true, weather };
     } catch (error) {
-        console.error('[Weather] Error:', error.message);
         return { success: false, error: error.message };
     }
 }
@@ -126,8 +121,6 @@ export function formatWeatherResult(result) {
  * 获取当前时间
  */
 export async function getCurrentTime(timezone) {
-    console.log('[Time] Getting time for:', timezone);
-
     // 城市名到时区的映射
     const tzMap = {
         'beijing': 'Asia/Shanghai',
@@ -222,8 +215,6 @@ export async function getCurrentTime(timezone) {
         const offsetMins = Math.abs(offsetMinutes % 60);
         const utcOffset = `${offsetHours >= 0 ? '+' : ''}${offsetHours}:${offsetMins.toString().padStart(2, '0')}`;
 
-        console.log('[Time] Got time:', formatted, tz);
-
         return {
             success: true,
             time: {
@@ -235,7 +226,6 @@ export async function getCurrentTime(timezone) {
             }
         };
     } catch (error) {
-        console.error('[Time] Error:', error.message);
         // 返回服务器时间作为后备（使用北京时间）
         const now = new Date();
         return {
@@ -271,8 +261,6 @@ export async function searchWeb(query, maxResults = 5) {
         return { success: false, error: 'Empty query', results: [] };
     }
 
-    console.log('[WebSearch] Searching:', query);
-
     // 依次尝试多个搜索源
     const searchMethods = [
         () => searchWithDuckDuckGoAPI(query, maxResults),
@@ -286,7 +274,7 @@ export async function searchWeb(query, maxResults = 5) {
                 return result;
             }
         } catch (error) {
-            console.error('[WebSearch] Method failed:', error.message);
+            // ignore
         }
     }
 
@@ -348,8 +336,6 @@ async function searchWithDuckDuckGoAPI(query, maxResults) {
         }
     }
 
-    console.log('[WebSearch] DuckDuckGo API found', results.length, 'results');
-
     return {
         success: results.length > 0,
         query,
@@ -386,8 +372,6 @@ async function searchWithWikipedia(query, maxResults) {
             });
         }
     }
-
-    console.log('[WebSearch] Wikipedia found', results.length, 'results');
 
     return {
         success: results.length > 0,

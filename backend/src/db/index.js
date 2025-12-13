@@ -23,10 +23,8 @@ export function initDatabase() {
     if (keyCount.count === 0) {
         const defaultKey = `sk-${uuidv4().replace(/-/g, '')}`;
         db.prepare('INSERT INTO api_keys (key, name) VALUES (?, ?)').run(defaultKey, 'Default Key');
-        console.log(`[DB] Created default API Key: ${defaultKey}`);
     }
 
-    console.log('[DB] Database initialized');
     return db;
 }
 

@@ -77,7 +77,6 @@ export function convertOpenAIToAntigravity(openaiRequest, projectId = '', sessio
     // 如果有工具相关内容，禁用 thinking（因为 thinking 块需要签名，无法伪造）
     let enableThinking = isThinkingModel(model);
     if (enableThinking && (hasTools || hasToolCallsInHistory || hasToolResultsInHistory)) {
-        console.log('[Converter] Detected tools or tool_calls in request. Disabling thinking for compatibility with Claude extended thinking requirements.');
         enableThinking = false;
     }
 
@@ -492,7 +491,6 @@ export function convertSSEChunk(antigravityData, requestId, model, includeThinki
 
         return chunks;
     } catch (error) {
-        console.error('[Converter] Failed to convert SSE chunk:', error);
         return null;
     }
 }
@@ -570,7 +568,6 @@ export function convertResponse(antigravityResponse, requestId, model, includeTh
             }
         };
     } catch (error) {
-        console.error('[Converter] Failed to convert response:', error);
         throw error;
     }
 }
@@ -645,20 +642,6 @@ export function convertAnthropicToAntigravity(anthropicRequest, projectId = '', 
 
     // 转换消息
     const contents = [];
-
-    // 调试：打印原始消息中的 tool_use 和 tool_result
-    console.log('[Converter] Message summary:');
-    for (let i = 0; i < messages.length; i++) {
-        const msg = messages[i];
-        if (Array.isArray(msg.content)) {
-            const types = msg.content.map(c => c.type).join(', ');
-            const toolUseIds = msg.content.filter(c => c.type === 'tool_use').map(c => c.id);
-            const toolResultIds = msg.content.filter(c => c.type === 'tool_result').map(c => c.tool_use_id);
-            console.log(`  [${i}] ${msg.role}: types=[${types}], tool_use_ids=[${toolUseIds}], tool_result_ids=[${toolResultIds}]`);
-        } else {
-            console.log(`  [${i}] ${msg.role}: string content`);
-        }
-    }
 
     for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
@@ -752,7 +735,6 @@ export function convertAnthropicToAntigravity(anthropicRequest, projectId = '', 
                           t.type.startsWith('computer') ||
                           t.type.startsWith('text_editor') ||
                           t.type.startsWith('bash'))) {
-                console.log(`[Converter] Skipping built-in tool: ${t.type}`);
                 return false;
             }
             return true;
@@ -903,9 +885,6 @@ export function convertAntigravityToAnthropic(antigravityResponse, requestId, mo
         const candidate = data.response?.candidates?.[0];
         const usage = data.response?.usageMetadata;
 
-        // 调试日志
-        console.log('[Converter] Antigravity response parts:', JSON.stringify(candidate?.content?.parts, null, 2));
-
         if (!candidate?.content?.parts) {
             throw new Error('Invalid response structure');
         }
@@ -999,7 +978,6 @@ export function convertAntigravityToAnthropic(antigravityResponse, requestId, mo
             }
         };
     } catch (error) {
-        console.error('[Converter] Failed to convert to Anthropic format:', error);
         throw error;
     }
 }
@@ -1160,7 +1138,6 @@ export function convertAntigravityToAnthropicSSE(antigravityData, requestId, mod
 
         return { events, state: newState };
     } catch (error) {
-        console.error('[Converter] Failed to convert Anthropic SSE:', error);
         return { events: [], state };
     }
 }
@@ -1196,7 +1173,6 @@ export function preprocessAnthropicRequest(request) {
 
         // 字符串内容没有 thinking 块
         if (typeof msg.content === 'string') {
-            console.log('[Converter] Detected assistant message without thinking block in history. Disabling thinking mode.');
             needsDisabling = true;
             break;
         }
@@ -1209,14 +1185,12 @@ export function preprocessAnthropicRequest(request) {
             (firstBlock.type === 'thinking' || firstBlock.type === 'redacted_thinking');
 
         if (!startsWithThinking) {
-            console.log('[Converter] Detected assistant message without thinking block in history. Disabling thinking mode.');
             needsDisabling = true;
             break;
         }
 
         // 检查 thinking 块是否有 signature（Claude API 要求）
         if (firstBlock.type === 'thinking' && !firstBlock.signature) {
-            console.log('[Converter] Detected thinking block without signature in history. Disabling thinking mode.');
             needsDisabling = true;
             break;
         }

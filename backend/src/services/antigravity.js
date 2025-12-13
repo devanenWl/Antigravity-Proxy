@@ -14,9 +14,6 @@ const USER_AGENT = ANTIGRAVITY_CONFIG.user_agent;
 export async function streamChat(account, request, onData, onError, signal = null) {
     const url = `${BASE_URL}/v1internal:streamGenerateContent?alt=sse`;
 
-    // Debug: 打印完整请求
-    console.log('[Antigravity] Full request:', JSON.stringify(request, null, 2));
-
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -32,7 +29,6 @@ export async function streamChat(account, request, onData, onError, signal = nul
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[Antigravity] Stream error response:', response.status, errorText);
             let errorMessage = `API Error: ${response.status}`;
 
             try {
@@ -69,8 +65,8 @@ export async function streamChat(account, request, onData, onError, signal = nul
                     if (data && data !== '[DONE]') {
                         try {
                             onData(data);
-                        } catch (error) {
-                            console.error('[Antigravity] Error processing data:', error);
+                        } catch {
+                            // ignore
                         }
                     }
                 }
@@ -86,11 +82,9 @@ export async function streamChat(account, request, onData, onError, signal = nul
         }
     } catch (error) {
         if (error.name === 'AbortError') {
-            console.log('[Antigravity] Request aborted');
             return;
         }
 
-        console.error('[Antigravity] Stream error:', error);
         if (onError) {
             onError(error);
         }
@@ -104,9 +98,6 @@ export async function streamChat(account, request, onData, onError, signal = nul
 export async function chat(account, request) {
     const url = `${BASE_URL}/v1internal:generateContent`;
 
-    // Debug: 打印完整请求
-    console.log('[Antigravity] Chat full request:', JSON.stringify(request, null, 2));
-
     const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -119,7 +110,6 @@ export async function chat(account, request) {
 
     if (!response.ok) {
         const errorText = await response.text();
-        console.error('[Antigravity] Chat error response:', response.status, errorText);
         let errorMessage = `API Error: ${response.status}`;
 
         try {

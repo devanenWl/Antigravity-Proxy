@@ -35,7 +35,6 @@ export default async function oauthRoutes(fastify) {
             const tokenData = await tokenResponse.json();
 
             if (!tokenData.access_token) {
-                console.error('[OAuth] Token exchange failed:', tokenData);
                 return reply.code(400).send({
                     success: false,
                     message: 'Token交换失败: ' + (tokenData.error_description || tokenData.error || '未知错误')
@@ -61,9 +60,8 @@ export default async function oauthRoutes(fastify) {
                 });
                 const userInfo = await userInfoResponse.json();
                 email = userInfo.email || null;
-                console.log('[OAuth] 获取用户邮箱:', email);
             } catch (emailError) {
-                console.warn('[OAuth] 获取用户邮箱失败:', emailError.message);
+                // ignore
             }
 
             // 检查账号是否已存在
@@ -72,12 +70,10 @@ export default async function oauthRoutes(fastify) {
             if (account) {
                 // 更新现有账号的 token
                 updateAccountToken(account.id, access_token, expires_in);
-                console.log(`[OAuth] 更新现有账号: ${email}`);
             } else {
                 // 创建新账号
                 const accountId = createAccount(email || `oauth_${Date.now()}`, refresh_token);
                 account = { id: accountId, email, refresh_token, access_token };
-                console.log(`[OAuth] 创建新账号: ${email}`);
             }
 
             // 初始化账号
@@ -86,7 +82,7 @@ export default async function oauthRoutes(fastify) {
                 account.refresh_token = refresh_token;
                 await initializeAccount(account);
             } catch (initError) {
-                console.error('[OAuth] 初始化账号失败:', initError);
+                // ignore
             }
 
             return {
@@ -99,7 +95,6 @@ export default async function oauthRoutes(fastify) {
                 }
             };
         } catch (error) {
-            console.error('[OAuth] Exchange error:', error);
             return reply.code(500).send({
                 success: false,
                 message: error.message

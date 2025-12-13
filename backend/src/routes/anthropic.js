@@ -10,6 +10,7 @@ import {
 } from '../services/converter.js';
 import { createRequestLog } from '../db/index.js';
 import { isThinkingModel, AVAILABLE_MODELS } from '../config.js';
+import { logModelCall } from '../services/modelLogger.js';
 
 export default async function anthropicRoutes(fastify) {
     // POST /v1/messages - Anthropic 格式的聊天端点
@@ -20,34 +21,15 @@ export default async function anthropicRoutes(fastify) {
         let anthropicRequest = request.body;
         const { stream = false, model } = anthropicRequest;
 
-        // 检测 thinking 模式 - 显式启用或根据模型名自动启用
-        const thinkingEnabledForLog = anthropicRequest.thinking?.type === 'enabled' ||
-            (anthropicRequest.thinking?.type !== 'disabled' && isThinkingModel(model));
-
-        // 详细日志
-        console.log('[Anthropic Route] Incoming request:', JSON.stringify({
-            userAgent: request.headers['user-agent'],
-            host: request.headers['host'],
-            ip: request.ip,
-            stream,
-            model,
-            messageCount: anthropicRequest.messages?.length,
-            hasTools: !!anthropicRequest.tools,
-            thinkingEnabled: thinkingEnabledForLog,
-            thinkingType: anthropicRequest.thinking?.type,
-            isThinkingModel: isThinkingModel(model)
-        }));
-
-        // 调试：打印工具格式
-        if (anthropicRequest.tools) {
-            console.log('[Anthropic Route] Tools:', JSON.stringify(anthropicRequest.tools.slice(0, 2), null, 2));
-        }
-
         let account = null;
         let usage = null;
         let status = 'success';
         let errorMessage = null;
         let modelSlotAcquired = false;
+        let invokedUpstream = false;
+        let responseForLog = null;
+        let streamEventsForLog = null;
+        let errorResponseForLog = null;
 
         try {
             // 1. 预处理请求 - 为没有 thinking 块的 assistant 消息添加 redacted_thinking
@@ -58,14 +40,15 @@ export default async function anthropicRoutes(fastify) {
             if (!modelSlotAcquired) {
                 status = 'error';
                 errorMessage = 'Model concurrency limit reached';
-                return reply.code(429).send({
+                errorResponseForLog = {
                     type: 'error',
                     error: {
                         type: 'rate_limit_error',
                         message: 'Model concurrency limit reached, please retry later',
                         code: 'model_concurrency_limit'
                     }
-                });
+                };
+                return reply.code(429).send(errorResponseForLog);
             }
 
             // 3. 获取最优账号
@@ -77,6 +60,7 @@ export default async function anthropicRoutes(fastify) {
 
             // 5. 流式或非流式处理
             if (stream) {
+                streamEventsForLog = [];
                 // 设置 SSE 响应头 (Anthropic 格式)
                 reply.raw.writeHead(200, {
                     'Content-Type': 'text/event-stream',
@@ -102,6 +86,7 @@ export default async function anthropicRoutes(fastify) {
                         }
                     }
                 };
+                streamEventsForLog.push({ event: 'message_start', data: messageStart });
                 reply.raw.write(`event: message_start\ndata: ${JSON.stringify(messageStart)}\n\n`);
 
                 // 处理客户端断开
@@ -113,6 +98,7 @@ export default async function anthropicRoutes(fastify) {
                 let sseState = {};
                 let lastUsage = null;
 
+                invokedUpstream = true;
                 await streamChat(
                     account,
                     antigravityRequest,
@@ -126,6 +112,7 @@ export default async function anthropicRoutes(fastify) {
                         // 发送所有事件
                         for (const event of events) {
                             const eventType = event.type;
+                            streamEventsForLog.push({ event: eventType, data: event });
                             reply.raw.write(`event: ${eventType}\ndata: ${JSON.stringify(event)}\n\n`);
 
                             // 提取 usage
@@ -144,6 +131,7 @@ export default async function anthropicRoutes(fastify) {
                                 message: error.message
                             }
                         };
+                        streamEventsForLog.push({ event: 'error', data: errorEvent });
                         reply.raw.write(`event: error\ndata: ${JSON.stringify(errorEvent)}\n\n`);
                     },
                     abortController.signal
@@ -158,8 +146,11 @@ export default async function anthropicRoutes(fastify) {
                         totalTokens: (lastUsage.input_tokens || 0) + (lastUsage.output_tokens || 0)
                     };
                 }
+
+                responseForLog = { stream: true, events: streamEventsForLog };
             } else {
                 // 非流式请求
+                invokedUpstream = true;
                 const antigravityResponse = await chat(account, antigravityRequest);
                 // 检测 thinking 模式 - 显式启用或根据模型名自动启用
                 const thinkingEnabled = anthropicRequest.thinking?.type === 'enabled' ||
@@ -174,7 +165,8 @@ export default async function anthropicRoutes(fastify) {
                     totalTokens: anthropicResponse.usage.input_tokens + anthropicResponse.usage.output_tokens
                 };
 
-                return anthropicResponse;
+                responseForLog = anthropicResponse;
+                return responseForLog;
             }
         } catch (error) {
             status = 'error';
@@ -197,13 +189,14 @@ export default async function anthropicRoutes(fastify) {
             const errorType = isCapacityError ? 'rate_limit_error' : 'api_error';
 
             // 返回 Anthropic 格式的错误
-            return reply.code(httpStatus).send({
+            errorResponseForLog = {
                 type: 'error',
                 error: {
                     type: errorType,
                     message: error.message
                 }
-            });
+            };
+            return reply.code(httpStatus).send(errorResponseForLog);
         } finally {
             // 释放模型并发槽位
             if (modelSlotAcquired) {
@@ -232,6 +225,31 @@ export default async function anthropicRoutes(fastify) {
             // 记录 API Key 使用量
             if (request.apiKey && usage?.totalTokens) {
                 recordApiKeyUsage(request.apiKey.id, usage.totalTokens);
+            }
+
+            // 只在「调用模型」时输出日志（Anthropic 格式：完整请求与响应）
+            try {
+                const thinkingEnabledForLog = anthropicRequest.thinking?.type === 'enabled' ||
+                    (anthropicRequest.thinking?.type !== 'disabled' && isThinkingModel(model));
+
+                if (invokedUpstream) {
+                    logModelCall({
+                        kind: 'model_call',
+                        provider: 'anthropic',
+                        endpoint: '/v1/messages',
+                        model,
+                        stream: !!stream,
+                        thinkingEnabled: !!thinkingEnabledForLog,
+                        status,
+                        latencyMs,
+                        account: account ? { id: account.id, email: account.email, tier: account.tier } : null,
+                        request: anthropicRequest,
+                        response: responseForLog,
+                        errorResponse: errorResponseForLog
+                    });
+                }
+            } catch {
+                // ignore logging failure
             }
         }
     });

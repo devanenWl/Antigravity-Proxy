@@ -28,16 +28,8 @@ initDatabase();
 
 // 创建 Fastify 实例
 const fastify = Fastify({
-    logger: {
-        transport: {
-            target: 'pino-pretty',
-            options: {
-                colorize: true,
-                translateTime: 'HH:MM:ss',
-                ignore: 'pid,hostname'
-            }
-        }
-    },
+    logger: false,
+    disableRequestLogging: true,
     bodyLimit: 50 * 1024 * 1024 // 50MB，支持大文件（如图片）
 });
 
@@ -86,8 +78,6 @@ await fastify.register(authRoutes);
 
 // 错误处理
 fastify.setErrorHandler((error, request, reply) => {
-    fastify.log.error(error);
-
     // OpenAI 格式的错误响应
     reply.code(error.statusCode || 500).send({
         error: {
@@ -109,25 +99,8 @@ const start = async () => {
             port: SERVER_CONFIG.port,
             host: SERVER_CONFIG.host
         });
-
-        console.log('');
-        console.log('╔═══════════════════════════════════════════════════════════╗');
-        console.log('║           Antigravity Proxy Server Started                ║');
-        console.log('╠═══════════════════════════════════════════════════════════╣');
-        console.log(`║  Server:     http://${SERVER_CONFIG.host}:${SERVER_CONFIG.port}                        ║`);
-        console.log(`║  API Base:   http://${SERVER_CONFIG.host}:${SERVER_CONFIG.port}/v1                     ║`);
-        console.log(`║  Admin:      http://${SERVER_CONFIG.host}:${SERVER_CONFIG.port}/admin                  ║`);
-        console.log(`║  OAuth:      http://${SERVER_CONFIG.host}:${SERVER_CONFIG.port}/oauth/authorize        ║`);
-        console.log('╠═══════════════════════════════════════════════════════════╣');
-        console.log('║  Endpoints:                                               ║');
-        console.log('║    POST /v1/chat/completions  - OpenAI Chat API           ║');
-        console.log('║    POST /v1/messages          - Anthropic Messages API    ║');
-        console.log('║    GET  /v1/models            - List models               ║');
-        console.log('║    GET  /health               - Health check              ║');
-        console.log('╚═══════════════════════════════════════════════════════════╝');
-        console.log('');
     } catch (err) {
-        fastify.log.error(err);
+        console.error(err);
         process.exit(1);
     }
 };
@@ -136,13 +109,11 @@ start();
 
 // 优雅关闭
 process.on('SIGINT', async () => {
-    console.log('\nShutting down...');
     await fastify.close();
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-    console.log('\nShutting down...');
     await fastify.close();
     process.exit(0);
 });

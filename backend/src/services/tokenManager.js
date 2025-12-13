@@ -33,14 +33,11 @@ export async function refreshAccessToken(account) {
         // 更新数据库
         updateAccountToken(account.id, data.access_token, data.expires_in);
 
-        console.log(`[Token] Refreshed token for account ${account.email}`);
-
         return {
             access_token: data.access_token,
             expires_in: data.expires_in
         };
     } catch (error) {
-        console.error(`[Token] Failed to refresh token for ${account.email}:`, error.message);
         updateAccountStatus(account.id, 'error', error.message);
         throw error;
     }
@@ -97,14 +94,11 @@ export async function fetchProjectId(account) {
         updateAccountTier(account.id, tier);
         account.tier = tier;
 
-        console.log(`[Token] Fetched projectId/tier for ${account.email}: ${projectId} / ${tier}`);
-
         return {
             projectId,
             tier
         };
     } catch (error) {
-        console.error(`[Token] Failed to fetch projectId for ${account.email}:`, error.message);
         throw error;
     }
 }
@@ -164,7 +158,6 @@ export async function fetchQuotaInfo(account, model = null) {
 
         return selected || { remainingFraction: minQuota, resetTime: minQuotaResetTime };
     } catch (error) {
-        console.error(`[Token] Failed to fetch quota for ${account.email}:`, error.message);
         throw error;
     }
 }
@@ -231,7 +224,6 @@ export async function fetchDetailedQuotaInfo(account) {
             resetTime: minQuotaResetTime
         };
     } catch (error) {
-        console.error(`[Token] Failed to fetch detailed quota for ${account.email}:`, error.message);
         throw error;
     }
 }
@@ -261,8 +253,6 @@ export async function initializeAccount(account) {
  * 启动定时 token 刷新任务
  */
 export function startTokenRefreshScheduler(intervalMs = 50 * 60 * 1000) {
-    console.log(`[Token] Starting token refresh scheduler (interval: ${intervalMs / 60000} minutes)`);
-
     const refresh = async () => {
         try {
             const accounts = getActiveAccounts();
@@ -278,8 +268,8 @@ export function startTokenRefreshScheduler(intervalMs = 50 * 60 * 1000) {
                     }
                 }
             }
-        } catch (error) {
-            console.error('[Token] Scheduler error:', error);
+        } catch {
+            // ignore (status is stored in DB)
         }
     };
 
@@ -294,8 +284,6 @@ export function startTokenRefreshScheduler(intervalMs = 50 * 60 * 1000) {
  * 启动定时配额同步任务
  */
 export function startQuotaSyncScheduler(intervalMs = 10 * 60 * 1000) {
-    console.log(`[Token] Starting quota sync scheduler (interval: ${intervalMs / 60000} minutes)`);
-
     const sync = async () => {
         try {
             const accounts = getActiveAccounts();
@@ -309,8 +297,8 @@ export function startQuotaSyncScheduler(intervalMs = 10 * 60 * 1000) {
                     // 单个账号失败不影响其他账号
                 }
             }
-        } catch (error) {
-            console.error('[Token] Quota sync error:', error);
+        } catch {
+            // ignore (status is stored in DB)
         }
     };
 

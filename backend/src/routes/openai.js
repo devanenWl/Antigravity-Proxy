@@ -11,6 +11,7 @@ import {
 } from '../services/converter.js';
 import { createRequestLog } from '../db/index.js';
 import { isThinkingModel } from '../config.js';
+import { logModelCall } from '../services/modelLogger.js';
 
 export default async function openaiRoutes(fastify) {
     // POST /v1/chat/completions
@@ -21,22 +22,15 @@ export default async function openaiRoutes(fastify) {
         const openaiRequest = request.body;
         const { stream = false, model } = openaiRequest;
 
-        // 详细日志：记录请求来源和内容
-        console.log('[OpenAI Route] Incoming request:', JSON.stringify({
-            userAgent: request.headers['user-agent'],
-            host: request.headers['host'],
-            ip: request.ip,
-            stream,
-            model,
-            messageCount: openaiRequest.messages?.length,
-            hasTools: !!openaiRequest.tools
-        }));
-
         let account = null;
         let usage = null;
         let status = 'success';
         let errorMessage = null;
         let modelSlotAcquired = false;
+        let invokedUpstream = false;
+        let responseForLog = null;
+        let streamChunksForLog = null;
+        let errorResponseForLog = null;
 
         try {
             // 1. 获取模型并发槽位（避免本地直接打爆上游）
@@ -44,13 +38,14 @@ export default async function openaiRoutes(fastify) {
             if (!modelSlotAcquired) {
                 status = 'error';
                 errorMessage = 'Model concurrency limit reached';
-                return reply.code(429).send({
+                errorResponseForLog = {
                     error: {
                         message: 'Model concurrency limit reached, please retry later',
                         type: 'rate_limit_error',
                         code: 'model_concurrency_limit'
                     }
-                });
+                };
+                return reply.code(429).send(errorResponseForLog);
             }
 
             // 2. 获取最优账号
@@ -62,6 +57,7 @@ export default async function openaiRoutes(fastify) {
 
             // 4. 流式或非流式处理
             if (stream) {
+                streamChunksForLog = [];
                 // 设置 SSE 响应头
                 reply.raw.writeHead(200, {
                     'Content-Type': 'text/event-stream',
@@ -78,6 +74,7 @@ export default async function openaiRoutes(fastify) {
 
                 let lastUsage = null;
 
+                invokedUpstream = true;
                 await streamChat(
                     account,
                     antigravityRequest,
@@ -92,6 +89,7 @@ export default async function openaiRoutes(fastify) {
                         const chunks = convertSSEChunk(data, requestId, model, isThinkingModel(model));
                         if (chunks) {
                             for (const chunk of chunks) {
+                                streamChunksForLog.push(chunk);
                                 reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
                             }
                         }
@@ -99,12 +97,14 @@ export default async function openaiRoutes(fastify) {
                     (error) => {
                         status = 'error';
                         errorMessage = error.message;
-                        reply.raw.write(`data: ${JSON.stringify({
+                        const errorChunk = {
                             error: {
                                 message: error.message,
                                 type: 'api_error'
                             }
-                        })}\n\n`);
+                        };
+                        streamChunksForLog.push(errorChunk);
+                        reply.raw.write(`data: ${JSON.stringify(errorChunk)}\n\n`);
                     },
                     abortController.signal
                 );
@@ -114,8 +114,10 @@ export default async function openaiRoutes(fastify) {
                 reply.raw.end();
 
                 usage = lastUsage;
+                responseForLog = { stream: true, chunks: streamChunksForLog, done: true };
             } else {
                 // 非流式请求（thinking 模型返回思维链）
+                invokedUpstream = true;
                 const antigravityResponse = await chat(account, antigravityRequest);
                 const openaiResponse = convertResponse(antigravityResponse, requestId, model, isThinkingModel(model));
 
@@ -125,7 +127,8 @@ export default async function openaiRoutes(fastify) {
                     totalTokens: openaiResponse.usage.total_tokens
                 };
 
-                return openaiResponse;
+                responseForLog = openaiResponse;
+                return responseForLog;
             }
         } catch (error) {
             status = 'error';
@@ -149,13 +152,14 @@ export default async function openaiRoutes(fastify) {
             const errorCode = isCapacityError ? 'rate_limit_exceeded' : 'internal_error';
 
             // 返回 OpenAI 格式的错误
-            return reply.code(httpStatus).send({
+            errorResponseForLog = {
                 error: {
                     message: error.message,
                     type: 'api_error',
                     code: errorCode
                 }
-            });
+            };
+            return reply.code(httpStatus).send(errorResponseForLog);
         } finally {
             // 释放模型并发槽位
             if (modelSlotAcquired) {
@@ -184,6 +188,27 @@ export default async function openaiRoutes(fastify) {
             // 记录 API Key 使用量
             if (request.apiKey && usage?.totalTokens) {
                 recordApiKeyUsage(request.apiKey.id, usage.totalTokens);
+            }
+
+            // 只在「调用模型」时输出日志（OpenAI 格式：完整请求与响应）
+            try {
+                if (invokedUpstream) {
+                    logModelCall({
+                        kind: 'model_call',
+                        provider: 'openai',
+                        endpoint: '/v1/chat/completions',
+                        model,
+                        stream: !!stream,
+                        status,
+                        latencyMs,
+                        account: account ? { id: account.id, email: account.email, tier: account.tier } : null,
+                        request: openaiRequest,
+                        response: responseForLog,
+                        errorResponse: errorResponseForLog
+                    });
+                }
+            } catch {
+                // ignore logging failure
             }
         }
     });

@@ -98,7 +98,6 @@ export default async function adminRoutes(fastify) {
             try {
                 await initializeAccount(account);
             } catch (initError) {
-                console.error('[Admin] Failed to initialize account:', initError);
                 // 不删除账号，只是标记为 error 状态
             }
 

@@ -66,7 +66,6 @@ class AccountPool {
 
                 return validAccount;
             } catch (error) {
-                console.error(`[Pool] Account ${account.email} unavailable:`, error.message);
                 // 继续尝试下一个账号
             }
         }
@@ -103,7 +102,6 @@ class AccountPool {
      */
     markAccountError(accountId, error) {
         updateAccountStatus(accountId, 'error', error.message || String(error));
-        console.error(`[Pool] Account ${accountId} marked as error:`, error.message);
     }
 
     /**
@@ -163,7 +161,6 @@ class AccountPool {
         const key = `${accountId}:${model}`;
         const until = Date.now() + cooldownMs;
         this.capacityCooldowns.set(key, until);
-        console.warn(`[Pool] Account ${accountId} capacity limited on model ${model}, cooldown ${cooldownMs}ms`);
     }
 
     /**
@@ -211,7 +208,7 @@ class AccountPool {
                     await fetchQuotaInfo(account);
                 }
             } catch (error) {
-                console.error(`[Pool] Failed to refresh quota for ${account.email}:`, error.message);
+                // ignore
             }
         }
     }
