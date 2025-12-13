@@ -34,4 +34,4 @@ RUN mkdir -p /app/data
 
 EXPOSE 3000
 WORKDIR /app/backend
-CMD ["node", "src/index.js"]
+CMD ["node", "src/bootstrap.js"]

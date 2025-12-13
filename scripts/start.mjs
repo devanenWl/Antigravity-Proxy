@@ -125,7 +125,7 @@ async function main() {
   await ensureFrontendBuild(env);
 
   log(`Starting backend on PORT=${env.PORT} ...`);
-  const backend = spawn('node', ['src/index.js'], {
+  const backend = spawn('node', ['src/bootstrap.js'], {
     cwd: backendDir,
     stdio: 'inherit',
     env

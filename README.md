@@ -282,6 +282,8 @@ antigravity-proxy/
 | `DB_PATH` | `../data/database.sqlite` | SQLite 路径（`npm start` 默认；Docker 固定 `/app/data/database.sqlite`） |
 | `NPM_REGISTRY` | (空) | 仅 `npm start`：自定义 npm registry（网络慢时可用镜像） |
 | `AGP_FORCE_BUILD` | `false` | `npm start` 强制重新安装前端依赖并重建 `frontend/dist` |
+| `OUTBOUND_PROXY` | (空) | 后端出站 HTTP(S) 代理（解决某些网络下 Google OAuth / token exchange 超时） |
+| `FETCH_CONNECT_TIMEOUT_MS` | `30000` | Node `fetch` 连接超时（毫秒）；弱网可适当调大 |
 | `ADMIN_PASSWORD` | `admin123` | 管理面板密码 |
 | `JWT_SECRET` | `antigravity-proxy-secret-key-2024` | 管理 JWT 密钥 |
 | `ADMIN_PASSWORD_BEARER_COMPAT` | `true` | 兼容 `Authorization: Bearer <ADMIN_PASSWORD>`（建议生产关闭） |
