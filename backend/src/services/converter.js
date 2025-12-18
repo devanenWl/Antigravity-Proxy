@@ -5,6 +5,37 @@ import { getMappedModel, isThinkingModel, AVAILABLE_MODELS } from '../config.js'
 const DEFAULT_THINKING_BUDGET = 4096;
 const DEFAULT_TEMPERATURE = 1;
 
+// Gemini 工具调用：thoughtSignature 透传（否则某些工具在下一轮会被上游拒绝）
+// 上游会在包含 functionCall 的 part 上返回 thoughtSignature；OpenAI 客户端并不知道这个字段，
+// 因此我们在代理内部用 tool_call_id 做一次短期缓存，并在用户回传 tool_calls 历史时自动补回。
+const TOOL_THOUGHT_SIGNATURE_TTL_MS = Number(process.env.TOOL_THOUGHT_SIGNATURE_TTL_MS || 10 * 60 * 1000);
+const TOOL_THOUGHT_SIGNATURE_MAX = Number(process.env.TOOL_THOUGHT_SIGNATURE_MAX || 5000);
+const toolThoughtSignatureCache = new Map(); // key: tool_call_id -> { signature, savedAt }
+
+function cacheToolThoughtSignature(toolCallId, signature) {
+    if (!toolCallId || !signature) return;
+    const key = String(toolCallId);
+    toolThoughtSignatureCache.set(key, { signature: String(signature), savedAt: Date.now() });
+
+    // 简单防御：避免 Map 无限制增长（按插入顺序淘汰最旧）
+    if (TOOL_THOUGHT_SIGNATURE_MAX > 0 && toolThoughtSignatureCache.size > TOOL_THOUGHT_SIGNATURE_MAX) {
+        const oldestKey = toolThoughtSignatureCache.keys().next().value;
+        if (oldestKey) toolThoughtSignatureCache.delete(oldestKey);
+    }
+}
+
+function getCachedToolThoughtSignature(toolCallId) {
+    if (!toolCallId) return null;
+    const key = String(toolCallId);
+    const entry = toolThoughtSignatureCache.get(key);
+    if (!entry) return null;
+    if (TOOL_THOUGHT_SIGNATURE_TTL_MS > 0 && Date.now() - entry.savedAt > TOOL_THOUGHT_SIGNATURE_TTL_MS) {
+        toolThoughtSignatureCache.delete(key);
+        return null;
+    }
+    return entry.signature;
+}
+
 // OpenAI 兼容：思考内容输出格式
 // - reasoning_content（默认）：思考增量写入 delta.reasoning_content / message.reasoning_content，正文不包含 <think>
 // - tags：思考混入正文并用 <think></think> 包裹
@@ -207,9 +238,12 @@ function convertMessage(msg) {
 
         // 添加工具调用
         for (const toolCall of msg.tool_calls) {
+            const toolCallId = toolCall.id || `call_${uuidv4().slice(0, 8)}`;
+            const thoughtSignature = getCachedToolThoughtSignature(toolCallId);
             parts.push({
+                ...(thoughtSignature ? { thoughtSignature } : {}),
                 functionCall: {
-                    id: toolCall.id,
+                    id: toolCallId,
                     name: toolCall.function.name,
                     args: JSON.parse(toolCall.function.arguments || '{}')
                 }
@@ -433,6 +467,11 @@ export function convertSSEChunk(antigravityData, requestId, model, includeThinki
 
             // 处理工具调用
             if (part.functionCall) {
+                const callId = part.functionCall.id || `call_${uuidv4().slice(0, 8)}`;
+                const sig = part.thoughtSignature || part.thought_signature;
+                if (sig) {
+                    cacheToolThoughtSignature(callId, sig);
+                }
                 chunks.push({
                     id: `chatcmpl-${requestId}`,
                     object: 'chat.completion.chunk',
@@ -443,7 +482,7 @@ export function convertSSEChunk(antigravityData, requestId, model, includeThinki
                         delta: {
                             tool_calls: [{
                                 index: 0,
-                                id: part.functionCall.id || `call_${uuidv4().slice(0, 8)}`,
+                                id: callId,
                                 type: 'function',
                                 function: {
                                     name: part.functionCall.name,
@@ -578,8 +617,13 @@ export function convertResponse(antigravityResponse, requestId, model, includeTh
             }
 
             if (part.functionCall) {
+                const callId = part.functionCall.id || `call_${uuidv4().slice(0, 8)}`;
+                const sig = part.thoughtSignature || part.thought_signature;
+                if (sig) {
+                    cacheToolThoughtSignature(callId, sig);
+                }
                 toolCalls.push({
-                    id: part.functionCall.id || `call_${uuidv4().slice(0, 8)}`,
+                    id: callId,
                     type: 'function',
                     function: {
                         name: part.functionCall.name,

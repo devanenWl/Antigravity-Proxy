@@ -287,6 +287,8 @@ antigravity-proxy/
 | `OUTBOUND_PROXY` | (空) | 后端出站 HTTP(S) 代理（解决某些网络下 Google OAuth / token exchange 超时） |
 | `FETCH_CONNECT_TIMEOUT_MS` | `30000` | Node `fetch` 连接超时（毫秒）；弱网可适当调大 |
 | `OPENAI_THINKING_OUTPUT` | `reasoning_content` | OpenAI SSE 思考输出：`reasoning_content`（推荐，Cherry Studio 可折叠）/ `tags`（输出 `<think>` 到正文）/ `both` |
+| `TOOL_THOUGHT_SIGNATURE_TTL_MS` | `600000` | Gemini 工具调用签名缓存 TTL（毫秒）；用于在下一轮回放 `thoughtSignature`，避免上游报缺失 |
+| `TOOL_THOUGHT_SIGNATURE_MAX` | `5000` | Gemini 工具调用签名缓存最大条数（防止内存无限增长；按最旧淘汰） |
 | `ADMIN_PASSWORD` | `admin123` | 管理面板密码 |
 | `JWT_SECRET` | `antigravity-proxy-secret-key-2024` | 管理 JWT 密钥 |
 | `ADMIN_PASSWORD_BEARER_COMPAT` | `true` | 兼容 `Authorization: Bearer <ADMIN_PASSWORD>`（建议生产关闭） |
