@@ -20,6 +20,16 @@ const CLAUDE_THINKING_SIGNATURE_TTL_MS = Number(process.env.CLAUDE_THINKING_SIGN
 const CLAUDE_THINKING_SIGNATURE_MAX = Number(process.env.CLAUDE_THINKING_SIGNATURE_MAX || 5000);
 const claudeThinkingSignatureCache = new Map(); // key: tool_use_id -> { signature, savedAt }
 
+// OpenAI 端点：Claude tools + thinking 回放
+// OpenAI 协议没有 signature 字段，因此我们在代理内缓存 “tool_call_id -> {signature, thoughtText}”，
+// 并在用户回传 tool_calls 历史时自动插入 thought:true + thoughtSignature（必要时附带 thoughtText）。
+const CLAUDE_OPENAI_REPLAY_THOUGHT_TEXT = String(process.env.CLAUDE_OPENAI_REPLAY_THOUGHT_TEXT ?? 'true')
+    .trim()
+    .toLowerCase();
+const CLAUDE_OPENAI_REPLAY_INCLUDE_TEXT = !['0', 'false', 'no', 'n', 'off'].includes(CLAUDE_OPENAI_REPLAY_THOUGHT_TEXT);
+const claudeToolThinkingCache = new Map(); // key: tool_call_id -> { signature, thoughtText, savedAt }
+const claudeToolThinkingBuffer = new Map(); // key: requestId -> { signature, thoughtText }
+
 function cacheToolThoughtSignature(toolCallId, signature) {
     if (!toolCallId || !signature) return;
     const key = String(toolCallId);
@@ -42,6 +52,32 @@ function getCachedToolThoughtSignature(toolCallId) {
         return null;
     }
     return entry.signature;
+}
+
+function cacheClaudeToolThinking(toolCallId, signature, thoughtText) {
+    if (!toolCallId || !signature) return;
+    const key = String(toolCallId);
+    claudeToolThinkingCache.set(key, {
+        signature: String(signature),
+        thoughtText: String(thoughtText || ''),
+        savedAt: Date.now()
+    });
+    if (CLAUDE_THINKING_SIGNATURE_MAX > 0 && claudeToolThinkingCache.size > CLAUDE_THINKING_SIGNATURE_MAX) {
+        const oldestKey = claudeToolThinkingCache.keys().next().value;
+        if (oldestKey) claudeToolThinkingCache.delete(oldestKey);
+    }
+}
+
+function getCachedClaudeToolThinking(toolCallId) {
+    if (!toolCallId) return null;
+    const key = String(toolCallId);
+    const entry = claudeToolThinkingCache.get(key);
+    if (!entry) return null;
+    if (CLAUDE_THINKING_SIGNATURE_TTL_MS > 0 && Date.now() - entry.savedAt > CLAUDE_THINKING_SIGNATURE_TTL_MS) {
+        claudeToolThinkingCache.delete(key);
+        return null;
+    }
+    return entry;
 }
 
 function cacheClaudeThinkingSignature(toolUseId, signature) {
@@ -156,10 +192,27 @@ export function convertOpenAIToAntigravity(openaiRequest, projectId = '', sessio
     // 检查是否是 Claude 模型（Claude 不支持 topP，且 extended thinking 在 tool_use 链路需要签名）
     const isClaudeModel = model.includes('claude');
 
-    // OpenAI 端：仅对 Claude 在“工具相关”场景禁用 thinking（Gemini 支持 tools + thinking）
+    // OpenAI 端：Claude 在工具链路需要回放签名；若历史里已有 tool_calls/tool 结果但缓存缺失，则降级禁用 thinking 避免上游报错
     let enableThinking = isThinkingModel(model);
-    if (enableThinking && isClaudeModel && (hasTools || hasToolCallsInHistory || hasToolResultsInHistory)) {
-        enableThinking = false;
+    if (enableThinking && isClaudeModel && (hasToolCallsInHistory || hasToolResultsInHistory)) {
+        const ids = new Set();
+        for (const msg of nonSystemMessages) {
+            if (msg.role === 'assistant' && Array.isArray(msg.tool_calls)) {
+                for (const tc of msg.tool_calls) {
+                    if (tc?.id) ids.add(tc.id);
+                }
+            }
+            if (msg.role === 'tool' && msg.tool_call_id) {
+                ids.add(msg.tool_call_id);
+            }
+        }
+        for (const id of ids) {
+            const cached = getCachedClaudeToolThinking(id);
+            if (!cached?.signature) {
+                enableThinking = false;
+                break;
+            }
+        }
     }
 
     // 获取思考预算（优先使用 thinking_budget，其次 budget_tokens，最后默认值）
@@ -262,7 +315,18 @@ function convertMessage(msg) {
     if (msg.role === 'assistant' && msg.tool_calls) {
         const parts = [];
 
-        // 如果有文本内容
+        // OpenAI 端点：为 Claude tools 回放 thinking.signature（代理内缓存，不依赖客户端字段）
+        const firstToolCallId = msg.tool_calls?.[0]?.id;
+        const replay = firstToolCallId ? getCachedClaudeToolThinking(firstToolCallId) : null;
+        if (replay?.signature) {
+            parts.push({
+                thought: true,
+                text: CLAUDE_OPENAI_REPLAY_INCLUDE_TEXT ? (replay.thoughtText || '') : '',
+                thoughtSignature: replay.signature
+            });
+        }
+
+        // 如果有文本内容（必须在 thinking 之后，避免 Claude tool_use 校验失败）
         if (msg.content) {
             parts.push({ text: msg.content });
         }
@@ -425,11 +489,19 @@ export function convertSSEChunk(antigravityData, requestId, model, includeThinki
 
         const chunks = [];
         const stateKey = requestId;
+        const isClaudeModel = String(model || '').includes('claude');
+        const claudeBuf = claudeToolThinkingBuffer.get(stateKey) || { signature: null, thoughtText: '' };
         const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
 
         for (const part of parts) {
             // 处理思维链内容
             if (part.thought) {
+                if (isClaudeModel) {
+                    const sig = part.thoughtSignature || part.thought_signature;
+                    if (sig) claudeBuf.signature = sig;
+                    if (part.text) claudeBuf.thoughtText += part.text;
+                    claudeToolThinkingBuffer.set(stateKey, claudeBuf);
+                }
                 if (!includeThinking) continue;
 
                 const thoughtText = part.text ?? '';
@@ -503,6 +575,12 @@ export function convertSSEChunk(antigravityData, requestId, model, includeThinki
                 if (sig) {
                     cacheToolThoughtSignature(callId, sig);
                 }
+                if (isClaudeModel) {
+                    const signature = claudeBuf.signature || sig;
+                    if (signature) {
+                        cacheClaudeToolThinking(callId, signature, claudeBuf.thoughtText);
+                    }
+                }
                 chunks.push({
                     id: `chatcmpl-${requestId}`,
                     object: 'chat.completion.chunk',
@@ -566,6 +644,7 @@ export function convertSSEChunk(antigravityData, requestId, model, includeThinki
 
         // 处理结束标志
         if (candidate.finishReason === 'STOP' || candidate.finishReason === 'MAX_TOKENS') {
+            claudeToolThinkingBuffer.delete(stateKey);
             // 如果还在思维链中，先关闭标签
             if (OPENAI_THINKING_INCLUDE_TAGS && thinkingState.get(stateKey)) {
                 chunks.push({
@@ -627,12 +706,20 @@ export function convertResponse(antigravityResponse, requestId, model, includeTh
         let content = '';
         let reasoningContent = '';
         const toolCalls = [];
+        const isClaudeModel = String(model || '').includes('claude');
+        let claudeThoughtText = '';
+        let claudeSignature = null;
 
         for (const part of parts) {
             // 处理思维链
             if (part.thought) {
-                if (!includeThinking) continue;
                 const thoughtText = part.text ?? '';
+                if (isClaudeModel) {
+                    if (thoughtText) claudeThoughtText += thoughtText;
+                    const sig = part.thoughtSignature || part.thought_signature;
+                    if (sig) claudeSignature = sig;
+                }
+                if (!includeThinking) continue;
 
                 if (OPENAI_THINKING_INCLUDE_REASONING && thoughtText) {
                     reasoningContent += thoughtText;
@@ -652,6 +739,12 @@ export function convertResponse(antigravityResponse, requestId, model, includeTh
                 const sig = part.thoughtSignature || part.thought_signature;
                 if (sig) {
                     cacheToolThoughtSignature(callId, sig);
+                }
+                if (isClaudeModel) {
+                    const signature = claudeSignature || sig;
+                    if (signature) {
+                        cacheClaudeToolThinking(callId, signature, claudeThoughtText);
+                    }
                 }
                 toolCalls.push({
                     id: callId,

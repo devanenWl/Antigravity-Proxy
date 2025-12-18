@@ -296,6 +296,7 @@ antigravity-proxy/
 | `TOOL_THOUGHT_SIGNATURE_MAX` | `5000` | Gemini 工具调用签名缓存最大条数（防止内存无限增长；按最旧淘汰） |
 | `CLAUDE_THINKING_SIGNATURE_TTL_MS` | `600000` | Claude thinking 签名缓存 TTL（毫秒）；用于在下一轮回放 `thinking.signature`（代理用 tool_use_id 自动补齐） |
 | `CLAUDE_THINKING_SIGNATURE_MAX` | `5000` | Claude thinking 签名缓存最大条数（按最旧淘汰） |
+| `CLAUDE_OPENAI_REPLAY_THOUGHT_TEXT` | `true` | OpenAI 端点下，Claude tools 回放时是否附带 thought 文本（`true` 更稳但更占 token；`false` 更省 token） |
 | `ADMIN_PASSWORD` | `admin123` | 管理面板密码 |
 | `JWT_SECRET` | `antigravity-proxy-secret-key-2024` | 管理 JWT 密钥 |
 | `ADMIN_PASSWORD_BEARER_COMPAT` | `true` | 兼容 `Authorization: Bearer <ADMIN_PASSWORD>`（建议生产关闭） |
