@@ -53,6 +53,7 @@ export default async function openaiRoutes(fastify) {
             return (
                 msg.includes('exhausted your capacity on this model') ||
                 msg.includes('Resource has been exhausted') ||
+                msg.includes('No capacity available') ||
                 err?.upstreamStatus === 429
             );
         };

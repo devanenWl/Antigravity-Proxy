@@ -16,14 +16,16 @@ const CLAUDE_TOOL_RESULT_TEXT_PLACEHOLDER = '\u2063';
 // 由于客户端会在每一轮把全部 tool_result 原样回放到下一次请求里，
 // 多次工具调用叠加后很容易超过模型上下文窗口。
 // 这里对“发往上游的 tool 输出”做可配置的截断/预算控制（不影响客户端看到的 tool_result 原文）。
-const TOOL_RESULT_MAX_CHARS = Number(process.env.TOOL_RESULT_MAX_CHARS || 12000);
-const TOOL_RESULT_TOTAL_MAX_CHARS = Number(process.env.TOOL_RESULT_TOTAL_MAX_CHARS || 80000);
+// 2025-12：默认关闭（=0）避免影响网页抓取等场景；如需开启请设置环境变量。
+const TOOL_RESULT_MAX_CHARS = Number(process.env.TOOL_RESULT_MAX_CHARS ?? 0);
+const TOOL_RESULT_TOTAL_MAX_CHARS = Number(process.env.TOOL_RESULT_TOTAL_MAX_CHARS ?? 0);
 // 截断时保留尾部，避免丢失诸如 “Content truncated. Call the fetch tool with start_index=…” 等关键提示
 const TOOL_RESULT_TAIL_CHARS = Number(process.env.TOOL_RESULT_TAIL_CHARS || 1200);
 
 // 多工具链路时，很多客户端会把 max_tokens 设到极大（如 64k），导致“可用输入上下文”被挤压，
 // 更容易触发 Prompt is too long。这里提供一个可配置的上限（仅在请求包含 tools 或 tool_results 时生效）。
-const MAX_OUTPUT_TOKENS_WITH_TOOLS = Number(process.env.MAX_OUTPUT_TOKENS_WITH_TOOLS || 8192);
+// 2025-12：默认关闭（=0）；如需启用请显式设置环境变量。
+const MAX_OUTPUT_TOKENS_WITH_TOOLS = Number(process.env.MAX_OUTPUT_TOKENS_WITH_TOOLS ?? 0);
 
 const TOOL_RESULT_TRUNCATE_LOG = !['0', 'false', 'no', 'n', 'off'].includes(
     String(process.env.TOOL_RESULT_TRUNCATE_LOG ?? 'true').trim().toLowerCase()
