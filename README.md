@@ -2,7 +2,7 @@
 
 > **Google Antigravity API 反代网关** — 账号池 + 自动负载均衡 + Web 管理面板
 
-将 Google Antigravity API 封装成 **OpenAI / Anthropic / Gemini** 标准格式，支持 Gemini、Claude、GPT 等多种模型，完美兼容 Claude Code。
+将 Antigravity 封装成 **OpenAI / Anthropic / Gemini** 标准格式，支持 Gemini、Claude等多种模型，完美兼容 Claude Code。
 
 ## 核心特性
 
