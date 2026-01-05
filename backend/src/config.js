@@ -126,6 +126,10 @@ export const RETRY_CONFIG = Object.freeze({
     // 连续失败多少次才禁用账号
     get errorCountToDisable() {
         return Math.max(1, Number(process.env.ERROR_COUNT_TO_DISABLE || 3));
+    },
+    // 重试总超时时间 (ms)，默认 30 秒，避免客户端长时间等待
+    get totalTimeoutMs() {
+        return Math.max(0, Number(process.env.RETRY_TOTAL_TIMEOUT_MS || 30000));
     }
 });
 

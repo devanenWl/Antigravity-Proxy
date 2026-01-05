@@ -1,4 +1,4 @@
-import { isCapacityError, parseResetAfterMs, sleep } from './route-helpers.js';
+import { isCapacityError, isNonRetryableError, parseResetAfterMs, sleep } from './route-helpers.js';
 import { withCapacityRetry, withFullRetry } from './retry-handler.js';
 import { RETRY_CONFIG } from '../config.js';
 
@@ -75,6 +75,7 @@ export async function runChatWithFullRetry({
         sameAccountRetryDelayMs: RETRY_CONFIG.sameAccountRetryDelayMs,
         maxAccountSwitches,
         accountSwitchDelayMs: RETRY_CONFIG.baseRetryDelayMs,
+        totalTimeoutMs: RETRY_CONFIG.totalTimeoutMs,
         getAccount: async () => accountPool.getNextAccount(model),
         executeRequest: async ({ account }) => {
             const antigravityRequest = buildRequest(account);
@@ -175,6 +176,7 @@ export async function runStreamChatWithFullRetry({
             sameAccountRetryDelayMs: RETRY_CONFIG.sameAccountRetryDelayMs,
             maxAccountSwitches,
             accountSwitchDelayMs: RETRY_CONFIG.baseRetryDelayMs,
+            totalTimeoutMs: RETRY_CONFIG.totalTimeoutMs,
             getAccount: async () => accountPool.getNextAccount(model),
             executeRequest: async ({ account }) => {
                 lastAccount = account;
@@ -182,7 +184,7 @@ export async function runStreamChatWithFullRetry({
                 await streamChat(account, antigravityRequest, onData, null, abortSignal);
                 return true;
             },
-            onError: async ({ account, error, capacity }) => {
+            onError: async ({ account, error, capacity, nonRetryable }) => {
                 if (abortSignal?.aborted) {
                     aborted = true;
                     return;
@@ -199,11 +201,15 @@ export async function runStreamChatWithFullRetry({
             shouldRetryOnSameAccount: ({ error, capacity }) => {
                 // 如果中止了，不重试
                 if (abortSignal?.aborted) return false;
-                // 所有错误都可以同号重试（包括429，会等待冷却时间）
+                // 不可重试错误不再同号重试（会在 withFullRetry 中直接抛出）
+                if (isNonRetryableError(error)) return false;
+                // 所有其他错误都可以同号重试（包括429，会等待冷却时间）
                 return true;
             },
             shouldSwitchAccount: ({ error, capacity }) => {
                 if (abortSignal?.aborted) return false;
+                // 不可重试错误不换号（会在 withFullRetry 中直接抛出）
+                if (isNonRetryableError(error)) return false;
                 if (typeof canRetry === 'function' && !canRetry({ error })) return false;
                 return true;
             }
