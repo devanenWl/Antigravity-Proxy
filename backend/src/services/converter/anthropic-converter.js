@@ -1279,7 +1279,11 @@ export function preprocessAnthropicRequest(request) {
         return String(b.text || '').trim() === '{';
     };
 
-    if (looksLikeJsonOnlyInstruction) {
+    // 部分客户端（包括 Claude Code 的部分内部请求）会用“最后一条 assistant 消息”为输出做前缀（常见是 "{"）。
+    // extended thinking 开启时，这会触发上游校验：final assistant message 必须以 thinking/redacted_thinking 开头。
+    // 由于我们无法为该“人为注入的前缀”生成合法 signature，这里直接删除该前缀，并把约束挪到 system 提示中。
+    const hasAnyAssistantJsonPrefix = workingMessages.some(isAssistantJsonPrefix);
+    if (looksLikeJsonOnlyInstruction || hasAnyAssistantJsonPrefix) {
         const filtered = [];
         let droppedPrefix = false;
         for (const m of workingMessages) {
@@ -1294,7 +1298,60 @@ export function preprocessAnthropicRequest(request) {
             workingMessages = filtered;
 
             const hint = "Return only a single JSON object and start your response with '{'.";
-            if (!systemText.includes(hint)) {
+            if (!extractSystemText(workingSystem).includes(hint)) {
+                if (Array.isArray(workingSystem)) {
+                    workingSystem = [...workingSystem, { type: 'text', text: hint }];
+                } else if (typeof workingSystem === 'string') {
+                    workingSystem = `${workingSystem}\n\n${hint}`;
+                } else if (workingSystem == null) {
+                    workingSystem = hint;
+                } else {
+                    // unknown shape, keep as-is
+                }
+                didMutate = true;
+            }
+        }
+    }
+
+    // 更通用的 assistant prefill 兼容：
+    // Claude Code 以及部分客户端会在 messages 末尾追加一条 assistant 文本消息作为“续写前缀/格式约束”。
+    // 当 extended thinking 开启时，上游会要求该 final assistant message 以 thinking/redacted_thinking 开头，
+    // 否则直接 invalid_request_error（messages.N.content.0.type ...）。
+    //
+    // 策略：移除该 assistant prefill，并把“以该前缀开头”的约束挪到 system 中（尽量保语义）。
+    const startsWithThinkingBlock = (msg) => {
+        if (!msg || msg.role !== 'assistant') return false;
+        if (!Array.isArray(msg.content) || msg.content.length === 0) return false;
+        const b0 = msg.content[0];
+        return b0 && (b0.type === 'thinking' || b0.type === 'redacted_thinking');
+    };
+    const extractAssistantPrefillText = (msg) => {
+        if (!msg || msg.role !== 'assistant') return null;
+        if (typeof msg.content === 'string') return msg.content;
+        if (!Array.isArray(msg.content)) return null;
+        let out = '';
+        for (const b of msg.content) {
+            if (!b || typeof b !== 'object') continue;
+            if (b.type !== 'text') return null;
+            if (typeof b.text !== 'string') return null;
+            out += b.text;
+        }
+        return out;
+    };
+
+    const lastMsg = workingMessages[workingMessages.length - 1];
+    if (lastMsg?.role === 'assistant' && !startsWithThinkingBlock(lastMsg)) {
+        const prefillText = extractAssistantPrefillText(lastMsg);
+
+        // 无论是否能提取出纯文本，都先移除这条 assistant prefill（否则上游必报错）
+        workingMessages = workingMessages.slice(0, -1);
+        didMutate = true;
+
+        const trimmed = typeof prefillText === 'string' ? prefillText.trim() : '';
+        if (trimmed) {
+            // JSON 前缀已在上面处理过，这里只处理其它常见前缀（例如 "```json" / "{" 之外的格式约束）
+            const hint = `Start your response with the following prefix exactly (no extra characters before it): ${prefillText}`;
+            if (!extractSystemText(workingSystem).includes(hint)) {
                 if (Array.isArray(workingSystem)) {
                     workingSystem = [...workingSystem, { type: 'text', text: hint }];
                 } else if (typeof workingSystem === 'string') {

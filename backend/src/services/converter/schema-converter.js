@@ -25,6 +25,7 @@ export function convertJsonSchema(schema, uppercaseTypes = true) {
     // remove unsupported fields
     delete converted.$schema;
     delete converted.additionalProperties;
+    delete converted.propertyNames;
     delete converted.default;
     delete converted.minLength;
     delete converted.maxLength;
@@ -84,4 +85,3 @@ export function parseDataUrl(url) {
 export function generateSessionId() {
     return String(-Math.floor(Math.random() * 9e18));
 }
-
