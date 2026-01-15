@@ -113,7 +113,9 @@ export async function ensureValidToken(account) {
  */
 export async function fetchProjectId(account) {
     try {
-        const response = await fetch(`${ANTIGRAVITY_CONFIG.base_url}/v1internal:loadCodeAssist`, {
+        // NOTE: Use the non-sandbox endpoint for projectId discovery to match the official behavior.
+        // This avoids cases where the sandbox endpoint diverges or becomes unavailable for OAuth-onboard flows.
+        const response = await fetch(`https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${account.access_token}`,
