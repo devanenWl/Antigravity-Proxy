@@ -116,7 +116,11 @@ export default async function adminRoutes(fastify) {
                         error: { message: initError.message }
                     });
                 }
-                // 其他初始化错误不阻止创建，只是账号状态可能为 error
+                // 初始化失败（无效的 refresh token 等），删除幽灵账号
+                deleteAccount(accountId);
+                return reply.code(400).send({
+                    error: { message: initError.message || '账号初始化失败，refresh_token 可能无效' }
+                });
             }
 
             const latest = getAccountById(accountId);
@@ -172,6 +176,10 @@ export default async function adminRoutes(fastify) {
                         results.push({ email: acc.email || '(unknown)', success: false, error: initError.message });
                         continue;
                     }
+                    // 初始化失败（无效的 refresh token 等），删除幽灵账号
+                    deleteAccount(accountId);
+                    results.push({ email: acc.email || '(unknown)', success: false, error: initError.message || '账号初始化失败，refresh_token 可能无效' });
+                    continue;
                 }
 
                 const latest = getAccountById(accountId);
@@ -187,7 +195,12 @@ export default async function adminRoutes(fastify) {
                     tier: latest?.tier || null
                 });
             } catch (error) {
-                results.push({ email: acc.email || '(unknown)', success: false, error: error.message });
+                // 处理 UNIQUE constraint 错误，显示友好信息
+                if (error.message.includes('UNIQUE constraint')) {
+                    results.push({ email: acc.email || '(unknown)', success: false, error: `账号 ${acc.email || ''} 已存在` });
+                } else {
+                    results.push({ email: acc.email || '(unknown)', success: false, error: error.message });
+                }
             }
         }
 

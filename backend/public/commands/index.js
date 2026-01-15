@@ -522,6 +522,54 @@ commands.register('accounts:batch-export', async () => {
   }
 });
 
+// 单账号导出
+commands.register('accounts:export', async ({ id }) => {
+  if (!id) {
+    toast.warning('未指定账号');
+    return;
+  }
+
+  const loading = toast.loading('正在导出...');
+
+  try {
+    const result = await api.exportAccounts();
+    const allAccounts = result?.accounts || [];
+    const accountList = store.get('accounts.list') || [];
+
+    // 找到指定 ID 的账号
+    const account = accountList.find(a => String(a.id) === String(id));
+    if (!account) {
+      loading.update('未找到账号', 'warning');
+      setTimeout(() => loading.close(), 2000);
+      return;
+    }
+
+    const exportData = allAccounts.filter(a => a.email === account.email);
+
+    if (exportData.length === 0) {
+      loading.update('未找到可导出的数据', 'warning');
+      setTimeout(() => loading.close(), 2000);
+      return;
+    }
+
+    const json = JSON.stringify(exportData[0], null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `token-${account.email || id}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    loading.update('已导出账号', 'success');
+    setTimeout(() => loading.close(), 2000);
+  } catch (error) {
+    loading.close();
+    throw error;
+  }
+});
+
 // ============ 日志命令 ============
 
 commands.register('logs:load', async () => {

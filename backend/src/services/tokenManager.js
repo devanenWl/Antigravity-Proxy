@@ -1,4 +1,4 @@
-import { OAUTH_CONFIG, ANTIGRAVITY_CONFIG, AVAILABLE_MODELS, getMappedModel } from '../config.js';
+import { OAUTH_CONFIG, ANTIGRAVITY_CONFIG, AVAILABLE_MODELS, getMappedModel, isImageGenerationModel } from '../config.js';
 import { updateAccountToken, updateAccountQuota, updateAccountStatus, updateAccountProjectId, updateAccountTier, updateAccountEmail, getAllAccountsForRefresh, upsertAccountModelQuota, getAccountByEmail, deleteAccount } from '../db/index.js';
 
 // Token 刷新提前时间（5分钟）
@@ -187,13 +187,20 @@ export async function fetchQuotaInfo(account, model = null) {
         for (const [modelId, modelInfo] of entriesToScan) {
             if (!modelInfo) continue;
 
+            const isRelevant = QUOTA_RELEVANT_MODELS.has(modelId);
+            // 图像生成模型不参与总体配额计算（它们有独立的配额池）
+            const isImageModel = isImageGenerationModel(modelId);
+            const shouldAffectOverall = isRelevant && !isImageModel;
+
             // If the model is relevant but quotaInfo is missing, treat as 0 to avoid "phantom 100%".
             if (!modelInfo.quotaInfo) {
-                if (QUOTA_RELEVANT_MODELS.has(modelId)) {
+                if (isRelevant) {
                     sawQuotaSignal = true;
                     upsertAccountModelQuota(account.id, modelId, 0, null);
-                    minQuota = 0;
-                    minQuotaResetTime = null;
+                    if (shouldAffectOverall) {
+                        minQuota = 0;
+                        minQuotaResetTime = null;
+                    }
                 }
                 continue;
             }
@@ -202,11 +209,11 @@ export async function fetchQuotaInfo(account, model = null) {
             const remainingFraction = toQuotaFraction(modelInfo.quotaInfo.remainingFraction, 0);
             const resetTimestamp = modelInfo.quotaInfo.resetTime ? new Date(modelInfo.quotaInfo.resetTime).getTime() : null;
 
-            if (QUOTA_RELEVANT_MODELS.has(modelId)) {
+            if (isRelevant) {
                 upsertAccountModelQuota(account.id, modelId, remainingFraction, resetTimestamp);
             }
 
-            if (remainingFraction < minQuota) {
+            if (shouldAffectOverall && remainingFraction < minQuota) {
                 minQuota = remainingFraction;
                 minQuotaResetTime = resetTimestamp;
             }
@@ -278,7 +285,9 @@ export async function fetchDetailedQuotaInfo(account) {
             if (!modelInfo) continue;
 
             const isRelevant = QUOTA_RELEVANT_MODELS.has(modelId);
-            const shouldAffectOverall = !hasAnyRelevantModel || isRelevant;
+            // 图像生成模型不参与总体配额计算（它们有独立的配额池）
+            const isImageModel = isImageGenerationModel(modelId);
+            const shouldAffectOverall = (!hasAnyRelevantModel || isRelevant) && !isImageModel;
 
             if (!modelInfo.quotaInfo) {
                 // For relevant models, missing quotaInfo should not be treated as "full".

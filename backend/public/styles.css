@@ -197,7 +197,7 @@ body {
   height: 100vh;
   width: 100%;
   background: var(--color-bg);
-  overflow-y: auto;
+  overflow-y: scroll; /* 始终显示滚动条，避免页面切换时按钮抖动 */
 }
 
 .container {
@@ -2129,6 +2129,11 @@ dialog[open] {
   flex-wrap: wrap;
 }
 
+/* 移动端全选按钮 - 桌面端隐藏 */
+.mobile-select-all {
+  display: none;
+}
+
 .accounts-toolbar-actions {
   display: flex;
   gap: 8px;
@@ -2141,6 +2146,11 @@ dialog[open] {
     align-items: stretch;
     gap: 16px;
     margin-bottom: 24px;
+  }
+
+  /* 移动端显示全选按钮 */
+  .mobile-select-all {
+    display: inline-flex;
   }
 
   .accounts-toolbar-actions {
@@ -2157,10 +2167,10 @@ dialog[open] {
   
   .table .actions {
     display: grid !important;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 8px;
   }
-  
+
   .table .actions .btn {
     min-height: 44px;
     padding: 0;
@@ -2168,9 +2178,9 @@ dialog[open] {
     align-items: center;
     justify-content: center;
   }
-  
+
   .table .actions .btn[data-cmd="accounts:toggle-status"] {
-    grid-column: span 4;
+    grid-column: span 5;
     order: 10;
   }
 }

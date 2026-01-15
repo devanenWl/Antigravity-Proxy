@@ -36,6 +36,11 @@ export class AccountsPage extends Component {
             <div class="accounts-toolbar-left">
               <span class="text-secondary">共 ${accounts.length} 个账号</span>
               ${selectedCount > 0 ? `<span class="selection-count">已选 ${selectedCount} 个</span>` : ''}
+              ${accounts.length > 0 ? `
+                <button class="btn btn-sm mobile-select-all" data-cmd="accounts:select-all">
+                  ${allSelected ? '取消全选' : '全选'}
+                </button>
+              ` : ''}
             </div>
             <div class="accounts-toolbar-actions">
               ${selectedCount > 0 ? `
@@ -226,6 +231,9 @@ export class AccountsPage extends Component {
             </button>
             <button class="btn btn-sm btn-icon" title="刷新" data-cmd="accounts:refresh" data-id="${a.id}">
               ↻
+            </button>
+            <button class="btn btn-sm btn-icon" title="导出" data-cmd="accounts:export" data-id="${a.id}">
+              📤
             </button>
             <button class="btn btn-sm btn-icon" title="${status === 'active' ? '禁用' : '启用'}"
                     data-cmd="accounts:toggle-status"
