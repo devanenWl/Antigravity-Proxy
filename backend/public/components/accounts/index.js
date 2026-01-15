@@ -329,8 +329,8 @@ _renderQuotaDialog() {
     return `
       <form id="manualImportForm" class="import-form">
         <div class="form-group">
-          <label class="form-label">Email <span class="text-danger">*</span></label>
-          <input id="importEmail" class="form-input" placeholder="user@gmail.com" required />
+          <label class="form-label">Email <span class="text-secondary">(可选，留空自动获取)</span></label>
+          <input id="importEmail" class="form-input" placeholder="user@gmail.com" />
         </div>
         <div class="form-group">
           <label class="form-label">Refresh Token <span class="text-danger">*</span></label>
@@ -353,7 +353,7 @@ _renderQuotaDialog() {
         <button class="btn btn-primary" data-action="import-file-select">选择文件</button>
         <input type="file" id="importFileInput" accept=".json" style="display:none" />
         <div class="file-import-hint">
-          支持格式：[{"email":"...","refresh_token":"...","project_id":"..."}]
+          支持格式：[{"refresh_token":"...","email":"...(可选)","project_id":"...(可选)"}]
         </div>
       </div>
     `;
@@ -411,12 +411,12 @@ _bindEvents() {
     });
 
     this.on('[data-action="import-manual-submit"]', 'click', async () => {
-      const email = this.container.querySelector('#importEmail')?.value?.trim();
+      const email = this.container.querySelector('#importEmail')?.value?.trim() || null;
       const refreshToken = this.container.querySelector('#importRefreshToken')?.value?.trim();
       const projectId = this.container.querySelector('#importProjectId')?.value?.trim() || null;
 
-      if (!email || !refreshToken) {
-        toast.error('请填写 Email 和 Refresh Token');
+      if (!refreshToken) {
+        toast.error('请填写 Refresh Token');
         return;
       }
 
@@ -505,7 +505,7 @@ _bindEvents() {
         accounts = data;
       } else if (data.accounts && Array.isArray(data.accounts)) {
         accounts = data.accounts;
-      } else if (data.email && data.refresh_token) {
+      } else if (data.refresh_token) {
         accounts = [data];
       } else {
         accounts = [];
@@ -517,14 +517,14 @@ _bindEvents() {
         return;
       }
       
-      const validAccounts = accounts.filter(a => a.email && a.refresh_token).map(a => ({
-        email: a.email,
+      const validAccounts = accounts.filter(a => a.refresh_token).map(a => ({
+        email: a.email || null,
         refresh_token: a.refresh_token,
         project_id: a.project_id || null
       }));
       
       if (validAccounts.length === 0) {
-        loading.update('未找到包含 email 和 refresh_token 的账号', 'warning');
+        loading.update('未找到包含 refresh_token 的账号', 'warning');
         setTimeout(() => loading.close(), 2000);
         return;
       }

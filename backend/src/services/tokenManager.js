@@ -1,5 +1,5 @@
 import { OAUTH_CONFIG, ANTIGRAVITY_CONFIG, AVAILABLE_MODELS, getMappedModel } from '../config.js';
-import { updateAccountToken, updateAccountQuota, updateAccountStatus, updateAccountProjectId, updateAccountTier, getAllAccountsForRefresh, upsertAccountModelQuota } from '../db/index.js';
+import { updateAccountToken, updateAccountQuota, updateAccountStatus, updateAccountProjectId, updateAccountTier, updateAccountEmail, getAllAccountsForRefresh, upsertAccountModelQuota } from '../db/index.js';
 
 // Token 刷新提前时间（5分钟）
 const TOKEN_REFRESH_BUFFER = 5 * 60 * 1000;
@@ -342,21 +342,61 @@ export async function fetchDetailedQuotaInfo(account) {
 }
 
 /**
+ * 获取用户邮箱
+ */
+export async function fetchEmail(account) {
+    try {
+        const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${account.access_token}`,
+                'User-Agent': ANTIGRAVITY_CONFIG.user_agent
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch email: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const email = data.email;
+
+        if (email) {
+            updateAccountEmail(account.id, email);
+            account.email = email;
+        }
+
+        return email;
+    } catch (error) {
+        throw error;
+    }
+}
+
+/**
  * 初始化账号（刷新 token + 获取 projectId + 获取配额）
  */
 export async function initializeAccount(account) {
     // 1. 刷新 token
     await ensureValidToken(account);
 
-    // 2. 获取 projectId（如果没有）
+    // 2. 获取 email（如果没有）
+    if (!account.email) {
+        try {
+            await fetchEmail(account);
+        } catch {
+            // email 获取失败不影响账号初始化
+        }
+    }
+
+    // 3. 获取 projectId（如果没有）
     if (!account.project_id || !account.tier || account.tier === 'free-tier') {
         await fetchProjectId(account);
     }
 
-    // 3. 获取配额信息
+    // 4. 获取配额信息
     await fetchQuotaInfo(account);
 
-    // 4. 标记为活跃状态
+    // 5. 标记为活跃状态
     updateAccountStatus(account.id, 'active');
 
     return account;

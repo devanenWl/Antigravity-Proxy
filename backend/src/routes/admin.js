@@ -95,17 +95,17 @@ export default async function adminRoutes(fastify) {
     fastify.post('/admin/accounts', async (request, reply) => {
         const { email, refresh_token, project_id } = request.body;
 
-        if (!email || !refresh_token) {
+        if (!refresh_token) {
             return reply.code(400).send({
-                error: { message: 'email and refresh_token are required' }
+                error: { message: 'refresh_token is required' }
             });
         }
 
         try {
-            const accountId = createAccount(email, refresh_token, project_id || null);
+            const accountId = createAccount(email || null, refresh_token, project_id || null);
             const account = getAccountById(accountId);
 
-            // 初始化账号（刷新 token + 获取 projectId）
+            // 初始化账号（刷新 token + 获取 email/projectId）
             try {
                 await initializeAccount(account);
             } catch (initError) {
@@ -116,6 +116,7 @@ export default async function adminRoutes(fastify) {
             return {
                 success: true,
                 accountId,
+                email: latest?.email || email || null,
                 project_id: latest?.project_id || project_id || null,
                 tier: latest?.tier || null,
                 message: 'Account created successfully'
@@ -141,8 +142,13 @@ export default async function adminRoutes(fastify) {
         const results = [];
 
         for (const acc of accounts) {
+            if (!acc.refresh_token) {
+                results.push({ email: acc.email || '(unknown)', success: false, error: 'refresh_token is required' });
+                continue;
+            }
+
             try {
-                const accountId = createAccount(acc.email, acc.refresh_token, acc.project_id || null);
+                const accountId = createAccount(acc.email || null, acc.refresh_token, acc.project_id || null);
                 const account = getAccountById(accountId);
                 
                 try {
@@ -152,14 +158,14 @@ export default async function adminRoutes(fastify) {
                 
                 const latest = getAccountById(accountId);
                 results.push({ 
-                    email: acc.email, 
+                    email: latest?.email || acc.email || '(unknown)', 
                     success: true, 
                     accountId,
                     project_id: latest?.project_id || acc.project_id || null,
                     tier: latest?.tier || null
                 });
             } catch (error) {
-                results.push({ email: acc.email, success: false, error: error.message });
+                results.push({ email: acc.email || '(unknown)', success: false, error: error.message });
             }
         }
 

@@ -1,7 +1,7 @@
 -- 账号表
 CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE,
     refresh_token TEXT NOT NULL,
     access_token TEXT,
     token_expires_at INTEGER,

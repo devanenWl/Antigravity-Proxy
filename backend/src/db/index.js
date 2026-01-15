@@ -17,7 +17,46 @@ export function initDatabase() {
     const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf-8');
     db.exec(schema);
 
+    // 迁移：移除 email 的 NOT NULL 约束（SQLite 需要重建表）
+    migrateEmailNullable(db);
+
     return db;
+}
+
+function migrateEmailNullable(db) {
+    const tableInfo = db.prepare("PRAGMA table_info(accounts)").all();
+    const emailCol = tableInfo.find(c => c.name === 'email');
+    if (!emailCol || emailCol.notnull === 0) return;
+
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.transaction(() => {
+        db.exec(`
+            CREATE TABLE accounts_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE,
+                refresh_token TEXT NOT NULL,
+                access_token TEXT,
+                token_expires_at INTEGER,
+                project_id TEXT,
+                tier TEXT DEFAULT 'free-tier',
+                status TEXT DEFAULT 'active',
+                quota_remaining REAL DEFAULT 1.0,
+                quota_reset_time INTEGER,
+                last_used_at INTEGER,
+                error_count INTEGER DEFAULT 0,
+                last_error TEXT,
+                created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+            )
+        `);
+        db.exec(`
+            INSERT INTO accounts_new SELECT * FROM accounts
+        `);
+        db.exec('DROP TABLE accounts');
+        db.exec('ALTER TABLE accounts_new RENAME TO accounts');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts(status)');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_quota ON accounts(quota_remaining)');
+    })();
+    db.exec('PRAGMA foreign_keys = ON');
 }
 
 export function getDatabase() {
@@ -149,6 +188,10 @@ export function updateAccountProjectId(id, projectId) {
 
 export function updateAccountTier(id, tier) {
     getDatabase().prepare('UPDATE accounts SET tier = ? WHERE id = ?').run(tier, id);
+}
+
+export function updateAccountEmail(id, email) {
+    getDatabase().prepare('UPDATE accounts SET email = ? WHERE id = ?').run(email, id);
 }
 
 export function deleteAccount(id) {
