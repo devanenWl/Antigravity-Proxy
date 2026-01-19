@@ -39,8 +39,17 @@ export function convertJsonSchema(schema, uppercaseTypes = true) {
     delete converted.exclusiveMinimum;
     delete converted.exclusiveMaximum;
 
-    if (converted.type && uppercaseTypes) {
-        converted.type = converted.type.toUpperCase();
+    if (converted.type) {
+        // Gemini doesn't support array types like ["string", "null"]
+        // Extract the first non-null type when type is an array
+        if (Array.isArray(converted.type)) {
+            const nonNullType = converted.type.find(t => t !== 'null' && t !== null);
+            converted.type = nonNullType || converted.type[0] || 'string';
+        }
+
+        if (uppercaseTypes && typeof converted.type === 'string') {
+            converted.type = converted.type.toUpperCase();
+        }
     }
 
     if (converted.properties) {
