@@ -1199,9 +1199,16 @@ export function convertAntigravityToAnthropicSSE(antigravityData, requestId, mod
                 if (!Array.isArray(newState.deferredOtherParts) || newState.deferredOtherParts.length === 0) return false;
 
                 const waitedMs = newState.deferredOtherPartsAt > 0 ? now - newState.deferredOtherPartsAt : 0;
-                const exceeded =
-                    (maxDeferMs > 0 && waitedMs >= maxDeferMs) ||
-                    (maxDeferChunks > 0 && newState.deferredOtherPartsChunks >= maxDeferChunks);
+                // IMPORTANT:
+                // Some upstreams may stream multiple non-thinking chunks (tool_use/text) before the first thought chunk.
+                // If we flush too early based on "chunk count", we will suppress/close thinking and then permanently
+                // skip late-arriving thinking_delta, causing clients to "miss" thinking even though upstream sent it.
+                //
+                // Default behavior: prefer the time-based safety bound (ms). Only use chunk-count as a bound when the
+                // time-based bound is disabled (ms <= 0), so users can explicitly trade correctness vs latency.
+                const exceededMs = maxDeferMs > 0 && waitedMs >= maxDeferMs;
+                const exceededChunks = maxDeferChunks > 0 && newState.deferredOtherPartsChunks >= maxDeferChunks;
+                const exceeded = exceededMs || (maxDeferMs <= 0 && exceededChunks);
 
                 const sawThinkingWhileDeferring = !!newState.deferredSawThinking;
 
@@ -1212,6 +1219,24 @@ export function convertAntigravityToAnthropicSSE(antigravityData, requestId, mod
                 // or until finish, or until we hit the safety bounds.
                 if (!isFinalFinish && sawThinkingWhileDeferring && !exceeded) {
                     if (thinkingParts.length > 0) return false;
+                }
+
+                if (process.env.DEBUG_THINKING_FLOW) {
+                    try {
+                        console.warn(JSON.stringify({
+                            kind: 'thinking_defer_flush',
+                            requestId,
+                            waitedMs,
+                            bufferedCount: newState.deferredOtherParts.length,
+                            bufferedChunks: newState.deferredOtherPartsChunks,
+                            sawThinkingWhileDeferring,
+                            exceededMs,
+                            exceededChunks,
+                            maxDeferMs,
+                            maxDeferChunks,
+                            finishReason: isFinalFinish ? finishReason : null
+                        }));
+                    } catch { /* ignore */ }
                 }
 
                 // Ensure thinking is finalized (may be empty/redacted/suppressed) before emitting any non-thinking content.
@@ -1271,23 +1296,27 @@ export function convertAntigravityToAnthropicSSE(antigravityData, requestId, mod
                 finalizeThinkingBeforeNonThinking();
             }
 
-            // 处理文本（跳过空文本）
-            if (part.text !== undefined && part.text !== '') {
-                if (!newState.inText) {
-                    // text 的 index：如果有 thinking 则是 1，否则是 0
-                    newState.textIndex = newState.hasThinking ? 1 : 0;
-                    newState.nextIndex = newState.textIndex + 1;
-                    newState.inText = true;
+	            // 处理文本（跳过空文本）
+	            if (part.text !== undefined && part.text !== '') {
+	                if (!newState.inText) {
+	                    // text 的 index：按出现顺序分配，避免与 tool_use 等 block 冲突
+	                    const textIndex =
+	                        newState.nextIndex !== null && newState.nextIndex !== undefined
+	                            ? newState.nextIndex
+	                            : (newState.hasThinking ? 1 : 0);
+	                    newState.textIndex = textIndex;
+	                    newState.nextIndex = textIndex + 1;
+	                    newState.inText = true;
 
-                    events.push({
-                        type: 'content_block_start',
-                        index: newState.textIndex,
-                        content_block: {
-                            type: 'text',
-                            text: ''
-                        }
-                    });
-                }
+	                    events.push({
+	                        type: 'content_block_start',
+	                        index: textIndex,
+	                        content_block: {
+	                            type: 'text',
+	                            text: ''
+	                        }
+	                    });
+	                }
 
                 events.push({
                     type: 'content_block_delta',
