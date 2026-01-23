@@ -92,8 +92,8 @@ export function convertOpenAIToAntigravity(openaiRequest, projectId = '', sessio
     const hasToolResultsInHistory = nonSystemMessages.some((msg) => msg.role === 'tool');
 
     // Claude: no topP, and extended thinking requires signature replay on tool chain
-    const isClaudeModel = model.includes('claude');
-    const isGeminiModel = model.includes('gemini') || String(actualModel || '').includes('gemini');
+    const isClaudeModel = String(model || '').includes('claude');
+    const isGeminiModel = String(model || '').includes('gemini') || String(actualModel || '').includes('gemini');
 
     // Check if this is an image generation model (no system prompt, no thinking)
     const isImageModel = isImageGenerationModel(model);
@@ -438,7 +438,9 @@ function convertMessage(msg, ctx = {}) {
             if (!thoughtSignature && isClaudeModel && enableThinking) {
                 thoughtSignature = replayClaudeSignature || null;
             }
-            if (!thoughtSignature && isGeminiModel && enableThinking) {
+            // Gemini tools require thought_signature on functionCall parts
+            // regardless of whether thinking mode is enabled or disabled
+            if (!thoughtSignature && isGeminiModel) {
                 thoughtSignature = GEMINI_THOUGHT_SIGNATURE_SENTINEL;
             }
             parts.push({
@@ -490,6 +492,7 @@ export function convertSSEChunk(antigravityData, requestId, model, includeThinki
         const chunks = [];
         const stateKey = requestId;
         const isClaudeModel = String(model || '').includes('claude');
+        const isGeminiModel = String(model || '').includes('gemini');
         const claudeBuf = claudeToolThinkingBuffer.get(stateKey) || { signature: null, thoughtText: '', pendingToolCallIds: [] };
         if (!Array.isArray(claudeBuf.pendingToolCallIds)) claudeBuf.pendingToolCallIds = [];
         const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
@@ -587,7 +590,8 @@ export function convertSSEChunk(antigravityData, requestId, model, includeThinki
                 const callId = part.functionCall.id || `call_${uuidv4().slice(0, 8)}`;
                 const cleanedArgs = stripClaudeToolRequiredArgPlaceholderFromArgs(part.functionCall.args || {});
                 const sig = extractThoughtSignatureFromPart(part);
-                if (sig) {
+                // 仅 Gemini 模型需要写入 toolThoughtSignatureCache
+                if (sig && isGeminiModel) {
                     cacheToolThoughtSignature(callId, sig);
                 }
                 if (isClaudeModel) {
@@ -733,6 +737,7 @@ export function convertResponse(antigravityResponse, requestId, model, includeTh
         let reasoningContent = '';
         const toolCalls = [];
         const isClaudeModel = String(model || '').includes('claude');
+        const isGeminiModel = String(model || '').includes('gemini');
         let claudeThoughtText = '';
         let claudeSignature = extractThoughtSignatureFromCandidate(candidate, data);
         const claudeToolCallIds = [];
@@ -765,7 +770,8 @@ export function convertResponse(antigravityResponse, requestId, model, includeTh
                 const callId = part.functionCall.id || `call_${uuidv4().slice(0, 8)}`;
                 const cleanedArgs = stripClaudeToolRequiredArgPlaceholderFromArgs(part.functionCall.args || {});
                 const sig = extractThoughtSignatureFromPart(part);
-                if (sig) {
+                // 仅 Gemini 模型需要写入 toolThoughtSignatureCache
+                if (sig && isGeminiModel) {
                     cacheToolThoughtSignature(callId, sig);
                 }
                 if (isClaudeModel) {

@@ -105,12 +105,14 @@ export const THINKING_MODELS = [
 
 // 判断模型是否启用思维链
 export function isThinkingModel(model) {
-    return THINKING_MODELS.includes(model) || model.endsWith('-thinking');
+    const m = String(model || '');
+    return THINKING_MODELS.includes(m) || m.endsWith('-thinking');
 }
 
 // 判断模型是否是图像生成模型（不支持系统提示词，但支持思维链）
 export function isImageGenerationModel(model) {
-    return model === 'gemini-3-pro-image' || model.includes('-image');
+    const m = String(model || '');
+    return m === 'gemini-3-pro-image' || m.includes('-image');
 }
 
 // 获取实际发送的模型名称
