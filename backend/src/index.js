@@ -7,7 +7,7 @@ import { existsSync, mkdirSync } from 'fs';
 
 import { SERVER_CONFIG } from './config.js';
 import { initDatabase } from './db/index.js';
-import { startTokenRefreshScheduler, startQuotaSyncScheduler } from './services/tokenManager.js';
+import { startTokenRefreshScheduler, startQuotaSyncScheduler, startLogCleanupScheduler } from './services/tokenManager.js';
 import { configureGlobalFetchDispatcher } from './runtime/fetch-dispatcher.js';
 import { resolveRuntimePath } from './runtime/paths.js';
 
@@ -136,6 +136,7 @@ export async function startServer(options = {}) {
     // 启动定时任务
     startTokenRefreshScheduler();
     startQuotaSyncScheduler();
+    startLogCleanupScheduler();
 
     // 启动服务器
     try {

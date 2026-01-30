@@ -228,6 +228,22 @@ export function deleteAccount(id) {
 
 // ==================== Request Log 操作 ====================
 
+/**
+ * 清理过期日志（保留最近 24 小时）
+ */
+export function cleanupOldLogs() {
+    const db = getDatabase();
+    const cutoffTime = Date.now() - 24 * 60 * 60 * 1000; // 24 小时前
+
+    const result1 = db.prepare('DELETE FROM request_logs WHERE created_at < ?').run(cutoffTime);
+    const result2 = db.prepare('DELETE FROM request_attempt_logs WHERE created_at < ?').run(cutoffTime);
+
+    return {
+        requestLogs: result1.changes,
+        attemptLogs: result2.changes
+    };
+}
+
 export function createRequestLog(data) {
     const stmt = getDatabase().prepare(`
         INSERT INTO request_logs (account_id, api_key_id, model, prompt_tokens, completion_tokens,

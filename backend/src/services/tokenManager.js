@@ -1,5 +1,5 @@
 import { OAUTH_CONFIG, ANTIGRAVITY_CONFIG, AVAILABLE_MODELS, getMappedModel, isImageGenerationModel } from '../config.js';
-import { updateAccountToken, updateAccountQuota, updateAccountStatus, updateAccountProjectId, updateAccountTier, updateAccountEmail, getAllAccountsForRefresh, upsertAccountModelQuota, getAccountByEmail, deleteAccount } from '../db/index.js';
+import { updateAccountToken, updateAccountQuota, updateAccountStatus, updateAccountProjectId, updateAccountTier, updateAccountEmail, getAllAccountsForRefresh, upsertAccountModelQuota, getAccountByEmail, deleteAccount, cleanupOldLogs } from '../db/index.js';
 
 // Token 刷新提前时间（5分钟）
 const TOKEN_REFRESH_BUFFER = 5 * 60 * 1000;
@@ -609,4 +609,26 @@ export function startQuotaSyncScheduler(intervalMs = 10 * 60 * 1000) {
 
     // 设置定时任务
     return setInterval(sync, intervalMs);
+}
+
+/**
+ * 启动定时日志清理任务（每小时清理 24 小时前的日志）
+ */
+export function startLogCleanupScheduler(intervalMs = 60 * 60 * 1000) {
+    const cleanup = () => {
+        try {
+            const result = cleanupOldLogs();
+            if (result.requestLogs > 0 || result.attemptLogs > 0) {
+                console.log(`[LogCleanup] Deleted ${result.requestLogs} request logs, ${result.attemptLogs} attempt logs`);
+            }
+        } catch {
+            // ignore
+        }
+    };
+
+    // 启动时执行一次
+    cleanup();
+
+    // 设置定时任务
+    return setInterval(cleanup, intervalMs);
 }
