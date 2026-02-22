@@ -54,7 +54,7 @@ export function ensureDeviceIdentity(db, account) {
 
     const instanceId = account.instance_id || generateInstanceId();
     const deviceFingerprint = account.device_fingerprint || crypto.randomUUID();
-    const sessionId = account.session_id || crypto.randomUUID();
+    const sessionId = account.session_id || String(-Math.floor(Math.random() * 9e18));
 
     db.prepare(`
         UPDATE accounts
@@ -73,7 +73,7 @@ export function ensureDeviceIdentity(db, account) {
  * 轮换 session_id（用于模拟新会话）
  */
 export function rotateSessionId(db, account) {
-    const newSessionId = crypto.randomUUID();
+    const newSessionId = String(-Math.floor(Math.random() * 9e18));
     db.prepare('UPDATE accounts SET session_id = ? WHERE id = ?').run(newSessionId, account.id);
     account.session_id = newSessionId;
     return account;
