@@ -162,7 +162,6 @@ jobs:
           | 平台 | 文件 |
           |-----|------|
           | Linux x64 | `antigravity-proxy-linux-x64.tar.gz` |
-          | Linux ARM64 | `antigravity-proxy-linux-arm64.tar.gz` |
           | Windows x64 | `antigravity-proxy-win-x64.zip` |
           | macOS x64 | `antigravity-proxy-macos-x64.tar.gz` |
           | macOS ARM64 | `antigravity-proxy-macos-arm64.tar.gz` |
