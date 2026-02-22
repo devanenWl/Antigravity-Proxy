@@ -224,10 +224,10 @@ export async function fetchProjectId(account) {
 
     // 1. 先尝试 loadCodeAssist
     try {
-        const response = await fingerprintFetch('https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', {
+        const response = await fingerprintFetch(`${ANTIGRAVITY_CONFIG.base_url}/v1internal:loadCodeAssist`, {
             method: 'POST',
             headers: {
-                'Host': 'daily-cloudcode-pa.googleapis.com',
+                'Host': new URL(ANTIGRAVITY_CONFIG.base_url).host,
                 'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
                 'Authorization': `Bearer ${account.access_token}`,
                 'Content-Type': 'application/json',
