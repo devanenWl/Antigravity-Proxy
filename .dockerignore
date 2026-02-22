@@ -67,6 +67,13 @@ build
 # ============ 构建脚本 ============
 scripts/build.js
 
+# ============ TLS 指纹（仅保留 linux_amd64） ============
+backend/src/bin/fingerprint-src
+backend/src/bin/fingerprint_linux_arm64
+backend/src/bin/fingerprint_windows_amd64.exe
+backend/src/bin/fingerprint_darwin_amd64
+backend/src/bin/fingerprint_darwin_arm64
+
 # ============ 截图等杂项 ============
 *.png
 *.jpg
