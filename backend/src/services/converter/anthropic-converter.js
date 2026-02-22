@@ -453,7 +453,7 @@ export function convertAnthropicToAntigravity(anthropicRequest, projectId = '', 
     let actualModel = getMappedModel(model);
     if (shouldEnableHostedWebSearch) {
         // Web search requests should use Gemini's built-in search behavior
-        actualModel = 'gemini-2.5-flash';
+        actualModel = 'gemini-3-flash';
     }
     const requestedModelInfo = detectModelFamily(model);
     const actualModelInfo = detectModelFamily(actualModel);
