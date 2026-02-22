@@ -514,7 +514,7 @@ export async function loadCodeAssist(account) {
             'Accept-Encoding': 'gzip'
         },
         body: JSON.stringify({
-            metadata: { ideType: 'ANTIGRAVITY' }
+            metadata: { ideType: 'ANTIGRAVITY', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' }
         })
     });
 

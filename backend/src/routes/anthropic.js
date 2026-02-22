@@ -103,6 +103,7 @@ export default async function anthropicRoutes(fastify) {
                         buildRequest: (a) => {
                             const req = structuredClone(antigravityRequestBase);
                             req.project = a.project_id || '';
+                            if (a.session_id) req.request.sessionId = a.session_id;
                             return req;
                         },
                         streamChat: async (a, req, onData, onError, signal) => {
@@ -411,7 +412,7 @@ export default async function anthropicRoutes(fastify) {
             // 成功调用后发送 Trajectory Analytics + 关联 Metrics（fire-and-forget）
             if (status === 'success' && account && invokedUpstream) {
                 touchAccountActivity(account.id);
-                sendTrajectoryAnalytics(account, model).catch(() => {});
+                sendTrajectoryAnalytics(account, model, fullRequestId).catch(() => {});
                 sendRequestMetrics(account, fullRequestId).catch(() => {});
             }
         }

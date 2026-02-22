@@ -12,6 +12,7 @@ import { QA_PAIRS } from '../constants/qaPairs.js';
 
 const BASE_URL = ANTIGRAVITY_CONFIG.base_url;
 const USER_AGENT = ANTIGRAVITY_CONFIG.user_agent;
+const API_HOST = new URL(BASE_URL).host;
 const AG_VERSION = USER_AGENT.match(/antigravity\/([\d.]+)/)?.[1] || '1.18.3';
 
 // 模块级持久 deviceId（与 antigravity2api 一致，模块加载时生成一次）
@@ -145,10 +146,11 @@ function buildGeneratorMetadata(qa) {
     ];
 }
 
-function buildTrajectoryPayload(account) {
+function buildTrajectoryPayload(account, requestId) {
     const qa = randomQAPair();
     const cascadeId = crypto.randomUUID();
-    const trajectoryId = crypto.randomUUID();
+    // 从 requestId 派生 trajectoryId（与 antigravity2api 一致）
+    const trajectoryId = requestId?.split('/')[2] || crypto.randomUUID();
 
     return {
         trajectory: {
@@ -174,21 +176,22 @@ function buildTrajectoryPayload(account) {
  * 向上游发送 Trajectory Analytics 数据（fire-and-forget）
  * @param {Object} account - 包含 access_token, device_fingerprint, tier 等的账号对象
  * @param {string} _model - 使用的模型名称（未使用，payload 中使用 MODEL_PLACEHOLDER_M12）
+ * @param {string} requestId - 真实请求的 requestId，用于派生 trajectoryId
  */
-export async function sendTrajectoryAnalytics(account, _model) {
+export async function sendTrajectoryAnalytics(account, _model, requestId) {
     if (!account?.access_token) return;
 
     try {
         await fingerprintFetch(`${BASE_URL}/v1internal:recordTrajectoryAnalytics`, {
             method: 'POST',
             headers: {
-                'Host': 'daily-cloudcode-pa.sandbox.googleapis.com',
+                'Host': API_HOST,
                 'User-Agent': USER_AGENT,
                 'Authorization': `Bearer ${account.access_token}`,
                 'Content-Type': 'application/json',
                 'Accept-Encoding': 'gzip'
             },
-            body: JSON.stringify(buildTrajectoryPayload(account))
+            body: JSON.stringify(buildTrajectoryPayload(account, requestId))
         });
     } catch { /* fire-and-forget，静默失败 */ }
 }

@@ -139,10 +139,10 @@ async function onboardUser(account) {
         // 对每个 tier 进行轮询重试
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                const response = await fingerprintFetch('https://cloudcode-pa.googleapis.com/v1internal:onboardUser', {
+                const response = await fingerprintFetch(`${ANTIGRAVITY_CONFIG.base_url}/v1internal:onboardUser`, {
                     method: 'POST',
                     headers: {
-                        'Host': 'cloudcode-pa.googleapis.com',
+                        'Host': new URL(ANTIGRAVITY_CONFIG.base_url).host,
                         'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
                         'Authorization': `Bearer ${account.access_token}`,
                         'Content-Type': 'application/json',

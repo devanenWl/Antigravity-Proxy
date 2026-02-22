@@ -195,7 +195,7 @@ export function startUnleashScheduler(getActiveAccounts) {
     setTimeout(() => {
         run();
         _intervalId = setInterval(() => {
-            const jitter = (Math.random() - 0.5) * 2 * UNLEASH_JITTER_MS;
+            const jitter = Math.floor(Math.random() * UNLEASH_JITTER_MS);
             setTimeout(run, jitter);
         }, UNLEASH_INTERVAL_MS);
     }, 10_000 + Math.random() * 20_000);

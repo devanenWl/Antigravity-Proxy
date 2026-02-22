@@ -10,6 +10,9 @@ import { logModelCall } from '../services/modelLogger.js';
 import { isCapacityError, isAuthenticationError, parseResetAfterMs, SSE_HEADERS } from '../utils/route-helpers.js';
 import { createAbortController, runChatWithFullRetry, runStreamChatWithFullRetry, runChatWithCapacityRetry, runStreamChatWithCapacityRetry } from '../utils/request-handler.js';
 import { buildUpstreamSystemInstruction } from '../services/converter/system-instruction.js';
+import { sendTrajectoryAnalytics } from '../services/trajectory.js';
+import { sendRequestMetrics } from '../services/telemetry.js';
+import { touchAccountActivity } from '../services/warmup.js';
 
 function generateSessionId() {
     return String(-Math.floor(Math.random() * 9e18));
@@ -191,6 +194,7 @@ export default async function geminiRoutes(fastify) {
             let responseForLog = null;
             let streamChunksForLog = null;
             let errorResponseForLog = null;
+            let fullRequestId = null;
 
             try {
                 modelSlotAcquired = acquireModelSlot(model);
@@ -203,7 +207,8 @@ export default async function geminiRoutes(fastify) {
                     return reply.code(429).send(errorResponseForLog);
                 }
 
-                const requestId = `agent/${Date.now()}/${uuidv4()}/${Math.floor(Math.random() * 10)}`;
+                fullRequestId = `agent/${Date.now()}/${uuidv4()}/${Math.floor(Math.random() * 10)}`;
+                const requestId = fullRequestId;
 
                 // Gemini 端点 body：允许 {request:{...}} 或直接 {...}
                 const rawBody = request.body && typeof request.body === 'object' ? request.body : {};
@@ -303,6 +308,7 @@ export default async function geminiRoutes(fastify) {
                             buildRequest: (a) => {
                                 const req = structuredClone(antigravityRequestBase);
                                 req.project = a.project_id || '';
+                                if (a.session_id) req.request.sessionId = a.session_id;
                                 return req;
                             },
                             streamChat: async (a, req, onData, onError, signal) => {
@@ -381,6 +387,7 @@ export default async function geminiRoutes(fastify) {
                     buildRequest: (a) => {
                         const req = structuredClone(antigravityRequestBase);
                         req.project = a.project_id || '';
+                        if (a.session_id) req.request.sessionId = a.session_id;
                         return req;
                     },
                     execute: async (a, req) => {
@@ -471,6 +478,13 @@ export default async function geminiRoutes(fastify) {
                     }
                 } catch {
                     // ignore
+                }
+
+                // 成功调用后发送 Trajectory Analytics + 关联 Metrics（fire-and-forget）
+                if (status === 'success' && account && invokedUpstream) {
+                    touchAccountActivity(account.id);
+                    sendTrajectoryAnalytics(account, model, fullRequestId).catch(() => {});
+                    sendRequestMetrics(account, fullRequestId).catch(() => {});
                 }
             }
     });
