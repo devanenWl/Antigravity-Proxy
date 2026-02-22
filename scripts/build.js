@@ -26,6 +26,7 @@ const releaseDir = path.join(distDir, 'release');
 // 目标平台配置
 const TARGETS = {
     'linux-x64': { pkg: 'node18-linux-x64', outExt: '', fpBin: 'fingerprint_linux_amd64' },
+    'linux-arm64': { pkg: 'node18-linux-arm64', outExt: '', fpBin: 'fingerprint_linux_arm64' },
     'win-x64': { pkg: 'node18-win-x64', outExt: '.exe', fpBin: 'fingerprint_windows_amd64.exe' },
     'macos-x64': { pkg: 'node18-macos-x64', outExt: '', fpBin: 'fingerprint_darwin_amd64' },
     'macos-arm64': { pkg: 'node18-macos-arm64', outExt: '', fpBin: 'fingerprint_darwin_arm64' }
