@@ -14,6 +14,8 @@ import { logModelCall } from '../services/modelLogger.js';
 import { isCapacityError, isAuthenticationError, parseResetAfterMs, SSE_HEADERS_ANTHROPIC } from '../utils/route-helpers.js';
 import { createAbortController, runChatWithFullRetry, runStreamChatWithFullRetry } from '../utils/request-handler.js';
 import { sendTrajectoryAnalytics } from '../services/trajectory.js';
+import { sendRequestMetrics } from '../services/telemetry.js';
+import { touchAccountActivity } from '../services/warmup.js';
 
 export default async function anthropicRoutes(fastify) {
     // POST /v1/messages - Anthropic 格式的聊天端点
@@ -48,6 +50,7 @@ export default async function anthropicRoutes(fastify) {
         let responseForLog = null;
         let streamEventsForLog = null;
         let errorResponseForLog = null;
+        let fullRequestId = null;
 
         try {
             // 1. 预处理请求 - 尝试补齐/回放 thinking.signature（仅在无法恢复时才会降级禁用 thinking）
@@ -71,7 +74,8 @@ export default async function anthropicRoutes(fastify) {
 
             // 3/4. 先转换请求格式（requestId 固定），project 在选择账号后再注入，便于容量错误时重试切号
             const antigravityRequestBase = convertAnthropicToAntigravity(anthropicRequest, '');
-            const requestId = antigravityRequestBase.requestId.split('/')[2] || antigravityRequestBase.requestId;
+            fullRequestId = antigravityRequestBase.requestId;
+            const requestId = fullRequestId.split('/')[2] || fullRequestId;
 
             // 5. 流式或非流式处理
             if (stream) {
@@ -404,9 +408,11 @@ export default async function anthropicRoutes(fastify) {
                 // ignore logging failure
             }
 
-            // 成功调用后发送 Trajectory Analytics（fire-and-forget）
+            // 成功调用后发送 Trajectory Analytics + 关联 Metrics（fire-and-forget）
             if (status === 'success' && account && invokedUpstream) {
+                touchAccountActivity(account.id);
                 sendTrajectoryAnalytics(account, model).catch(() => {});
+                sendRequestMetrics(account, fullRequestId).catch(() => {});
             }
         }
     });

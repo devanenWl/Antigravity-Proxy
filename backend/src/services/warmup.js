@@ -54,7 +54,7 @@ export async function runWarmupSequence(account) {
     const sequence = [
         { path: '/v1internal:onboardUser', body: { tierId: account.tier || 'standard-tier', metadata: { ideType: 'ANTIGRAVITY', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' } } },
         { path: '/v1internal:fetchAvailableModels', body: { project: account.project_id || '' } },
-        { path: '/v1internal:loadCodeAssist', body: { metadata: { ideType: 'ANTIGRAVITY' } } },
+        { path: '/v1internal:loadCodeAssist', body: { metadata: { ideType: 'ANTIGRAVITY', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' } } },
         { path: '/v1internal:recordCodeAssistMetrics', body: { metrics: [] } },
     ];
 

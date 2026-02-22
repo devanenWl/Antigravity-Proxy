@@ -154,7 +154,7 @@ function buildTrajectoryPayload(account) {
         trajectory: {
             cascadeId,
             trajectoryId,
-            trajectoryType: 'CHAT',
+            trajectoryType: 'CORTEX_TRAJECTORY_TYPE_CASCADE',
             executorMetadatas: [{
                 lastStepIdx: 4,
                 numGeneratorInvocations: 1,

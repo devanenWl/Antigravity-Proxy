@@ -10,6 +10,7 @@ import { fingerprintFetch } from '../runtime/fingerprint-requester.js';
 
 const BASE_URL = ANTIGRAVITY_CONFIG.base_url;
 const USER_AGENT = ANTIGRAVITY_CONFIG.user_agent;
+const API_HOST = new URL(BASE_URL).host;
 const AG_VERSION = USER_AGENT.match(/antigravity\/([\d.]+)/)?.[1] || '1.18.3';
 const TELEMETRY_INTERVAL_MS = 5 * 60_000; // 5 分钟基准
 const TELEMETRY_JITTER_MS = 5 * 60_000;   // 额外 0~5 分钟随机
@@ -59,21 +60,46 @@ function buildMetrics(account, trajectoryId) {
     };
 }
 
+function getMetricsHeaders(account) {
+    return {
+        'Host': API_HOST,
+        'User-Agent': USER_AGENT,
+        'Authorization': `Bearer ${account.access_token}`,
+        'Content-Type': 'application/json',
+        'Accept-Encoding': 'gzip'
+    };
+}
+
 /**
- * 向上游发送遥测数据
+ * 请求级遥测：在真实 API 请求成功后立即调用（fire-and-forget）
+ * 参考：antigravity2api 的 sendRecordCodeAssistMetrics，在每次请求后
+ * 使用从 requestId 派生的 trajectoryId 发送关联的 metrics。
+ *
+ * @param {Object} account - 账号对象
+ * @param {string} requestId - 真实请求的 requestId（格式 agent/ts/uuid/n）
+ */
+export async function sendRequestMetrics(account, requestId) {
+    if (!account?.access_token) return;
+    // 从 requestId 提取 uuid 部分作为 trajectoryId（与 antigravity2api 一致）
+    const trajectoryId = requestId?.split('/')[2] || crypto.randomUUID();
+    try {
+        await fingerprintFetch(`${BASE_URL}/v1internal:recordCodeAssistMetrics`, {
+            method: 'POST',
+            headers: getMetricsHeaders(account),
+            body: JSON.stringify(buildMetrics(account, trajectoryId))
+        });
+    } catch { /* fire-and-forget */ }
+}
+
+/**
+ * 定时调度器发送的遥测（后台补充，非请求关联）
  */
 async function sendTelemetry(account) {
     if (!account.access_token) return;
     try {
         await fingerprintFetch(`${BASE_URL}/v1internal:recordCodeAssistMetrics`, {
             method: 'POST',
-            headers: {
-                'Host': 'daily-cloudcode-pa.sandbox.googleapis.com',
-                'User-Agent': USER_AGENT,
-                'Authorization': `Bearer ${account.access_token}`,
-                'Content-Type': 'application/json',
-                'Accept-Encoding': 'gzip'
-            },
+            headers: getMetricsHeaders(account),
             body: JSON.stringify(buildMetrics(account))
         });
     } catch { /* 静默失败 */ }

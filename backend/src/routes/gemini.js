@@ -203,7 +203,7 @@ export default async function geminiRoutes(fastify) {
                     return reply.code(429).send(errorResponseForLog);
                 }
 
-                const requestId = `agent-${uuidv4()}`;
+                const requestId = `agent/${Date.now()}/${uuidv4()}/${Math.floor(Math.random() * 10)}`;
 
                 // Gemini 端点 body：允许 {request:{...}} 或直接 {...}
                 const rawBody = request.body && typeof request.body === 'object' ? request.body : {};

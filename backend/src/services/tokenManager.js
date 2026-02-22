@@ -34,8 +34,10 @@ export async function refreshAccessToken(account) {
         const response = await fetch(OAUTH_CONFIG.token_endpoint, {
             method: 'POST',
             headers: {
+                'Host': 'oauth2.googleapis.com',
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Go-http-client/1.1'
+                'User-Agent': 'Go-http-client/1.1',
+                'Accept-Encoding': 'gzip'
             },
             body: new URLSearchParams({
                 client_id: OAUTH_CONFIG.client_id,
@@ -232,7 +234,7 @@ export async function fetchProjectId(account) {
                 'Accept-Encoding': 'gzip'
             },
             body: JSON.stringify({
-                metadata: { ideType: 'ANTIGRAVITY' }
+                metadata: { ideType: 'ANTIGRAVITY', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' }
             })
         });
 
@@ -263,7 +265,7 @@ export async function fetchProjectId(account) {
                         'Accept-Encoding': 'gzip'
                     },
                     body: JSON.stringify({
-                        metadata: { ideType: 'ANTIGRAVITY' }
+                        metadata: { ideType: 'ANTIGRAVITY', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' }
                     })
                 });
 
@@ -502,11 +504,13 @@ export async function fetchDetailedQuotaInfo(account) {
  */
 export async function fetchEmail(account) {
     try {
-        const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
             method: 'GET',
             headers: {
+                'Host': 'www.googleapis.com',
                 'Authorization': `Bearer ${account.access_token}`,
-                'User-Agent': ANTIGRAVITY_CONFIG.user_agent
+                'User-Agent': 'Go-http-client/1.1',
+                'Accept-Encoding': 'gzip'
             }
         });
 
