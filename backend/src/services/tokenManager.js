@@ -1,5 +1,9 @@
 import { OAUTH_CONFIG, ANTIGRAVITY_CONFIG, AVAILABLE_MODELS, getMappedModel, isImageGenerationModel } from '../config.js';
 import { updateAccountToken, updateAccountQuota, updateAccountStatus, updateAccountProjectId, updateAccountTier, updateAccountEmail, getAllAccountsForRefresh, upsertAccountModelQuota, getAccountByEmail, deleteAccount, cleanupOldLogs } from '../db/index.js';
+import { fingerprintFetch } from '../runtime/fingerprint-requester.js';
+import { ensureDeviceIdentity } from './deviceIdentity.js';
+import { runWarmupSequence, startHeartbeat, updateHeartbeatAccount } from './warmup.js';
+import { getDatabase } from '../db/index.js';
 
 // Token 刷新提前时间（5分钟）
 const TOKEN_REFRESH_BUFFER = 5 * 60 * 1000;
@@ -50,6 +54,10 @@ export async function refreshAccessToken(account) {
 
         // 更新数据库
         updateAccountToken(account.id, data.access_token, data.expires_in);
+
+        // 同步更新 heartbeat 中的 account 引用
+        account.access_token = data.access_token;
+        updateHeartbeatAccount(account);
 
         return {
             access_token: data.access_token,
@@ -129,12 +137,14 @@ async function onboardUser(account) {
         // 对每个 tier 进行轮询重试
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                const response = await fetch('https://cloudcode-pa.googleapis.com/v1internal:onboardUser', {
+                const response = await fingerprintFetch('https://cloudcode-pa.googleapis.com/v1internal:onboardUser', {
                     method: 'POST',
                     headers: {
+                        'Host': 'cloudcode-pa.googleapis.com',
+                        'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
                         'Authorization': `Bearer ${account.access_token}`,
                         'Content-Type': 'application/json',
-                        'User-Agent': ANTIGRAVITY_CONFIG.user_agent
+                        'Accept-Encoding': 'gzip'
                     },
                     body: JSON.stringify({
                         tierId: tierId,
@@ -212,12 +222,14 @@ export async function fetchProjectId(account) {
 
     // 1. 先尝试 loadCodeAssist
     try {
-        const response = await fetch('https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', {
+        const response = await fingerprintFetch('https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', {
             method: 'POST',
             headers: {
+                'Host': 'daily-cloudcode-pa.googleapis.com',
+                'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
                 'Authorization': `Bearer ${account.access_token}`,
                 'Content-Type': 'application/json',
-                'User-Agent': ANTIGRAVITY_CONFIG.user_agent
+                'Accept-Encoding': 'gzip'
             },
             body: JSON.stringify({
                 metadata: { ideType: 'ANTIGRAVITY' }
@@ -241,12 +253,14 @@ export async function fetchProjectId(account) {
 
             // 3. onboardUser 成功后，再调用 loadCodeAssist 获取 tier
             try {
-                const response = await fetch('https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', {
+                const response = await fingerprintFetch('https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', {
                     method: 'POST',
                     headers: {
+                        'Host': 'daily-cloudcode-pa.googleapis.com',
+                        'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
                         'Authorization': `Bearer ${account.access_token}`,
                         'Content-Type': 'application/json',
-                        'User-Agent': ANTIGRAVITY_CONFIG.user_agent
+                        'Accept-Encoding': 'gzip'
                     },
                     body: JSON.stringify({
                         metadata: { ideType: 'ANTIGRAVITY' }
@@ -286,12 +300,14 @@ export async function fetchProjectId(account) {
  */
 export async function fetchQuotaInfo(account, model = null) {
     try {
-        const response = await fetch(`${ANTIGRAVITY_CONFIG.base_url}/v1internal:fetchAvailableModels`, {
+        const response = await fingerprintFetch(`${ANTIGRAVITY_CONFIG.base_url}/v1internal:fetchAvailableModels`, {
             method: 'POST',
             headers: {
+                'Host': new URL(ANTIGRAVITY_CONFIG.base_url).host,
+                'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
                 'Authorization': `Bearer ${account.access_token}`,
                 'Content-Type': 'application/json',
-                'User-Agent': ANTIGRAVITY_CONFIG.user_agent
+                'Accept-Encoding': 'gzip'
             },
             body: JSON.stringify({
                 project: account.project_id || ''
@@ -384,12 +400,14 @@ export async function fetchDetailedQuotaInfo(account) {
         // 确保有有效的 token
         await ensureValidToken(account);
 
-        const response = await fetch(`${ANTIGRAVITY_CONFIG.base_url}/v1internal:fetchAvailableModels`, {
+        const response = await fingerprintFetch(`${ANTIGRAVITY_CONFIG.base_url}/v1internal:fetchAvailableModels`, {
             method: 'POST',
             headers: {
+                'Host': new URL(ANTIGRAVITY_CONFIG.base_url).host,
+                'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
                 'Authorization': `Bearer ${account.access_token}`,
                 'Content-Type': 'application/json',
-                'User-Agent': ANTIGRAVITY_CONFIG.user_agent
+                'Accept-Encoding': 'gzip'
             },
             body: JSON.stringify({
                 project: account.project_id || ''
@@ -545,8 +563,14 @@ export async function initializeAccount(account) {
     // 4. 获取配额信息
     await fetchQuotaInfo(account);
 
-    // 5. 标记为活跃状态
+    // 5. 生成设备指纹（首次初始化时）
+    try { ensureDeviceIdentity(getDatabase(), account); } catch { /* ignore */ }
+
+    // 6. 标记为活跃状态
     updateAccountStatus(account.id, 'active');
+
+    // 7. 执行 Warmup 启动序列并启动 Heartbeat（后台，不阻塞）
+    runWarmupSequence(account).then(() => startHeartbeat(account)).catch(() => {});
 
     return account;
 }
@@ -631,4 +655,11 @@ export function startLogCleanupScheduler(intervalMs = 60 * 60 * 1000) {
 
     // 设置定时任务
     return setInterval(cleanup, intervalMs);
+}
+
+/**
+ * 获取所有活跃账号（供伪装服务调度器使用）
+ */
+export function getAllActiveAccounts() {
+    return getAllAccountsForRefresh().filter(a => a.status === 'active' && a.access_token);
 }

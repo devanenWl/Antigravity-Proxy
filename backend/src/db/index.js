@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { SERVER_CONFIG } from '../config.js';
+import { migrateDeviceIdentityColumns } from '../services/deviceIdentity.js';
 import { resolveRuntimePath } from '../runtime/paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,9 @@ export function initDatabase(options = {}) {
 
     // 迁移：移除 email 的 NOT NULL 约束（SQLite 需要重建表）
     migrateEmailNullable(db);
+
+    // 迁移：添加设备指纹字段
+    migrateDeviceIdentityColumns(db);
 
     return db;
 }

@@ -7,9 +7,12 @@ import { existsSync, mkdirSync } from 'fs';
 
 import { SERVER_CONFIG } from './config.js';
 import { initDatabase } from './db/index.js';
-import { startTokenRefreshScheduler, startQuotaSyncScheduler, startLogCleanupScheduler } from './services/tokenManager.js';
+import { startTokenRefreshScheduler, startQuotaSyncScheduler, startLogCleanupScheduler, getAllActiveAccounts } from './services/tokenManager.js';
 import { configureGlobalFetchDispatcher } from './runtime/fetch-dispatcher.js';
 import { resolveRuntimePath } from './runtime/paths.js';
+import { startUnleashScheduler } from './services/unleash.js';
+import { startAllHeartbeats } from './services/warmup.js';
+import { startTelemetryScheduler } from './services/telemetry.js';
 
 import openaiRoutes from './routes/openai.js';
 import anthropicRoutes from './routes/anthropic.js';
@@ -137,6 +140,15 @@ export async function startServer(options = {}) {
     startTokenRefreshScheduler();
     startQuotaSyncScheduler();
     startLogCleanupScheduler();
+
+    // 启动伪装服务（Unleash 心跳、Heartbeat 保活、遥测上报）
+    const getAccounts = () => getAllActiveAccounts();
+    startUnleashScheduler(getAccounts);
+    startTelemetryScheduler(getAccounts);
+    // Heartbeat 在首次获取到账号列表后启动
+    setTimeout(() => {
+        try { startAllHeartbeats(getAccounts()); } catch { /* ignore */ }
+    }, 15_000);
 
     // 启动服务器
     try {

@@ -61,7 +61,7 @@ function normalizeModelName(model) {
 
 function isClaude46Model(model) {
     const name = normalizeModelName(model);
-    return name.includes('claude-opus-4-6') || name.includes('claude-4-6');
+    return name.includes('claude-opus-4-6') || name.includes('claude-sonnet-4-6') || name.includes('claude-4-6');
 }
 
 function normalizeThinkingType(rawType) {
@@ -326,7 +326,7 @@ export function convertOpenAIToAntigravity(openaiRequest, projectId = '', sessio
         stop
     } = openaiRequest;
 
-    const requestId = `agent-${uuidv4()}`;
+    const requestId = `agent/${Date.now()}/${uuidv4()}/${Math.floor(Math.random() * 10)}`;
     const toolOutputLimiter = createToolOutputLimiter({
         provider: 'openai',
         route: '/v1/chat/completions',

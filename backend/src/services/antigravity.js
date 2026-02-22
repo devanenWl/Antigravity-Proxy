@@ -1,8 +1,10 @@
 import { ANTIGRAVITY_CONFIG } from '../config.js';
+import { fingerprintFetch, fingerprintStreamFetch } from '../runtime/fingerprint-requester.js';
 import fs from 'fs';
 
 const BASE_URL = ANTIGRAVITY_CONFIG.base_url;
 const USER_AGENT = ANTIGRAVITY_CONFIG.user_agent;
+const API_HOST = new URL(BASE_URL).host;
 
 /**
  * 判断模型是否需要伪非流式（上游已关闭这些模型的非流式端点）
@@ -91,13 +93,15 @@ export async function streamChat(account, request, onData, onError, signal = nul
 
     try {
         captureUpstreamRequest('stream', url, request);
-        const response = await fetch(url, {
+        const response = await fingerprintStreamFetch(url, {
             method: 'POST',
             headers: {
+                'Host': API_HOST,
+                'User-Agent': USER_AGENT,
                 'Authorization': `Bearer ${account.access_token}`,
                 'Content-Type': 'application/json',
-                'User-Agent': USER_AGENT,
-                'Accept': 'text/event-stream'
+                'Accept': 'text/event-stream',
+                'Accept-Encoding': 'gzip'
             },
             body: JSON.stringify(request),
             signal
@@ -364,12 +368,14 @@ export async function chat(account, request) {
     const url = `${BASE_URL}/v1internal:generateContent`;
 
     captureUpstreamRequest('chat', url, request);
-    const response = await fetch(url, {
+    const response = await fingerprintFetch(url, {
         method: 'POST',
         headers: {
+            'Host': API_HOST,
+            'User-Agent': USER_AGENT,
             'Authorization': `Bearer ${account.access_token}`,
             'Content-Type': 'application/json',
-            'User-Agent': USER_AGENT
+            'Accept-Encoding': 'gzip'
         },
         body: JSON.stringify(request)
     });
@@ -423,12 +429,14 @@ export async function countTokens(account, request) {
     const url = `${BASE_URL}/v1internal:countTokens`;
 
     captureUpstreamRequest('countTokens', url, request);
-    const response = await fetch(url, {
+    const response = await fingerprintFetch(url, {
         method: 'POST',
         headers: {
+            'Host': API_HOST,
+            'User-Agent': USER_AGENT,
             'Authorization': `Bearer ${account.access_token}`,
             'Content-Type': 'application/json',
-            'User-Agent': USER_AGENT
+            'Accept-Encoding': 'gzip'
         },
         body: JSON.stringify(request)
     });
@@ -469,12 +477,14 @@ export async function countTokens(account, request) {
 export async function fetchAvailableModels(account) {
     const url = `${BASE_URL}/v1internal:fetchAvailableModels`;
 
-    const response = await fetch(url, {
+    const response = await fingerprintFetch(url, {
         method: 'POST',
         headers: {
+            'Host': API_HOST,
+            'User-Agent': USER_AGENT,
             'Authorization': `Bearer ${account.access_token}`,
             'Content-Type': 'application/json',
-            'User-Agent': USER_AGENT
+            'Accept-Encoding': 'gzip'
         },
         body: JSON.stringify({
             project: account.project_id || ''
@@ -494,12 +504,14 @@ export async function fetchAvailableModels(account) {
 export async function loadCodeAssist(account) {
     const url = `${BASE_URL}/v1internal:loadCodeAssist`;
 
-    const response = await fetch(url, {
+    const response = await fingerprintFetch(url, {
         method: 'POST',
         headers: {
+            'Host': API_HOST,
+            'User-Agent': USER_AGENT,
             'Authorization': `Bearer ${account.access_token}`,
             'Content-Type': 'application/json',
-            'User-Agent': USER_AGENT
+            'Accept-Encoding': 'gzip'
         },
         body: JSON.stringify({
             metadata: { ideType: 'ANTIGRAVITY' }

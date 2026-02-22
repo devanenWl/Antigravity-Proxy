@@ -16,7 +16,13 @@ export const OAUTH_CONFIG = {
 // Antigravity API 配置
 export const ANTIGRAVITY_CONFIG = {
     base_url: 'https://daily-cloudcode-pa.sandbox.googleapis.com',
-    user_agent: 'antigravity/1.15.8 windows/amd64'
+    user_agent: 'antigravity/1.18.3 windows/amd64'
+};
+
+// Unleash 功能开关 Token
+export const UNLEASH_TOKENS = {
+    frontend: 'production.eb07600f9680e825c582db6570e7e0adf500657b3dc4802625ba4516',
+    client: 'production.e44558998bfc35ea9584dc65858e4485fdaa5d7ef46903e0c67712d1'
 };
 
 // Antigravity 官方系统提示词（上游可能会校验；可用 OFFICIAL_SYSTEM_PROMPT 覆盖）
@@ -77,15 +83,15 @@ export const AVAILABLE_MODELS = [
     { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-2.5-flash-thinking', displayName: 'Gemini 2.5 Flash (Thinking)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash Lite', provider: 'google', supportsImages: false, supportsThinking: false, maxTokens: 1048576, maxOutputTokens: 65535 },
+    { id: 'gemini-3.1-pro-high', displayName: 'Gemini 3.1 Pro (High)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
+    { id: 'gemini-3.1-pro-low', displayName: 'Gemini 3.1 Pro (Low)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-3-pro-image', displayName: 'Gemini 3 Pro Image', provider: 'google', supportsImages: true, supportsThinking: true },
     // 上游内部 revision 模型：可以调用，但小 max_tokens 可能只输出思考 token 而无文本 parts
     { id: 'rev19-uic3-1p', displayName: 'rev19-uic3-1p', provider: 'google', supportsImages: false, supportsThinking: false },
     { id: 'claude-opus-4-6', displayName: 'Claude Opus 4.6', provider: 'anthropic', supportsImages: true, supportsThinking: false, maxTokens: 200000, maxOutputTokens: 64000 },
     { id: 'claude-opus-4-6-thinking', displayName: 'Claude Opus 4.6 (Thinking)', provider: 'anthropic', supportsImages: true, supportsThinking: true, maxTokens: 200000, maxOutputTokens: 64000 },
-    { id: 'claude-opus-4-5', displayName: 'Claude Opus 4.5', provider: 'anthropic', supportsImages: true, supportsThinking: false, maxTokens: 200000, maxOutputTokens: 64000 },
-    { id: 'claude-opus-4-5-thinking', displayName: 'Claude Opus 4.5 (Thinking)', provider: 'anthropic', supportsImages: true, supportsThinking: true, maxTokens: 200000, maxOutputTokens: 64000 },
-    { id: 'claude-sonnet-4-5', displayName: 'Claude Sonnet 4.5', provider: 'anthropic', supportsImages: true, supportsThinking: false, maxTokens: 200000, maxOutputTokens: 64000 },
-    { id: 'claude-sonnet-4-5-thinking', displayName: 'Claude Sonnet 4.5 (Thinking)', provider: 'anthropic', supportsImages: true, supportsThinking: true, maxTokens: 200000, maxOutputTokens: 64000 },
+    { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', provider: 'anthropic', supportsImages: true, supportsThinking: false, maxTokens: 200000, maxOutputTokens: 64000 },
+    { id: 'claude-sonnet-4-6-thinking', displayName: 'Claude Sonnet 4.6 (Thinking)', provider: 'anthropic', supportsImages: true, supportsThinking: true, maxTokens: 200000, maxOutputTokens: 64000 },
     { id: 'gpt-oss-120b-medium', displayName: 'GPT-OSS 120B (Medium)', provider: 'openai', supportsImages: false, supportsThinking: true, maxTokens: 131072, maxOutputTokens: 32768 }
 ];
 
@@ -94,12 +100,14 @@ export const MODEL_MAPPING = {
     'claude-opus-4-6': 'claude-opus-4-6-thinking',
     'claude-4-6-thinking': 'claude-opus-4-6-thinking',
     'claude-4-6': 'claude-opus-4-6-thinking',
-    'claude-opus-4-5': 'claude-opus-4-5-thinking',
-    // Claude Code 常用简写模型名（避免上游报 Requested entity was not found）
-    'claude-4-5-thinking': 'claude-opus-4-5-thinking',
-    'claude-4-5': 'claude-opus-4-5-thinking',
-    // thinking 版本在上游是独立模型：不要降级到非 thinking，否则会导致工具调用场景无思维链输出
-    'claude-sonnet-4-5-thinking': 'claude-sonnet-4-5-thinking',
+    'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6',
+    // 废弃模型兼容映射
+    'claude-opus-4-5': 'claude-opus-4-6-thinking',
+    'claude-opus-4-5-thinking': 'claude-opus-4-6-thinking',
+    'claude-4-5-thinking': 'claude-opus-4-6-thinking',
+    'claude-4-5': 'claude-opus-4-6-thinking',
+    'claude-sonnet-4-5': 'claude-sonnet-4-6',
+    'claude-sonnet-4-5-thinking': 'claude-sonnet-4-6',
     // Claude Haiku 不存在，映射到 Opus 4.6
     'claude-haiku-4-5-20251001': 'claude-opus-4-6',
     'gemini-2.5-flash-thinking': 'gemini-2.5-flash',
@@ -121,10 +129,11 @@ export const THINKING_MODELS = [
     'gemini-3-flash-thinking',
     'gemini-3-pro-high',
     'gemini-3-pro-low',
+    'gemini-3.1-pro-high',
+    'gemini-3.1-pro-low',
     'gemini-3-pro-image',
     'claude-opus-4-6-thinking',
-    'claude-opus-4-5-thinking',
-    'claude-sonnet-4-5-thinking',
+    'claude-sonnet-4-6-thinking',
     'gpt-oss-120b-medium'
 ];
 

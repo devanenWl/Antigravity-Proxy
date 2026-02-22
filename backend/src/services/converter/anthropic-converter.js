@@ -118,7 +118,7 @@ const THINKING_EFFORT_BUDGET_MAP = Object.freeze({
 
 function isClaude46Model(model) {
     const name = normalizeModelName(model);
-    return name.includes('claude-opus-4-6') || name.includes('claude-4-6');
+    return name.includes('claude-opus-4-6') || name.includes('claude-sonnet-4-6') || name.includes('claude-4-6');
 }
 
 function normalizeAnthropicThinkingType(rawType) {
@@ -598,7 +598,7 @@ export function convertAnthropicToAntigravity(anthropicRequest, projectId = '', 
     // 构建请求体
     const request = {
         project: projectId || '',
-        requestId: `agent-${uuidv4()}`,
+        requestId: `agent/${Date.now()}/${uuidv4()}/${Math.floor(Math.random() * 10)}`,
         request: {
             contents,
             generationConfig,

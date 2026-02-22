@@ -13,6 +13,7 @@ import { isThinkingModel, AVAILABLE_MODELS } from '../config.js';
 import { logModelCall } from '../services/modelLogger.js';
 import { isCapacityError, isAuthenticationError, parseResetAfterMs, SSE_HEADERS_ANTHROPIC } from '../utils/route-helpers.js';
 import { createAbortController, runChatWithFullRetry, runStreamChatWithFullRetry } from '../utils/request-handler.js';
+import { sendTrajectoryAnalytics } from '../services/trajectory.js';
 
 export default async function anthropicRoutes(fastify) {
     // POST /v1/messages - Anthropic 格式的聊天端点
@@ -70,7 +71,7 @@ export default async function anthropicRoutes(fastify) {
 
             // 3/4. 先转换请求格式（requestId 固定），project 在选择账号后再注入，便于容量错误时重试切号
             const antigravityRequestBase = convertAnthropicToAntigravity(anthropicRequest, '');
-            const requestId = antigravityRequestBase.requestId.replace('agent-', '');
+            const requestId = antigravityRequestBase.requestId.split('/')[2] || antigravityRequestBase.requestId;
 
             // 5. 流式或非流式处理
             if (stream) {
@@ -401,6 +402,11 @@ export default async function anthropicRoutes(fastify) {
                 }
             } catch {
                 // ignore logging failure
+            }
+
+            // 成功调用后发送 Trajectory Analytics（fire-and-forget）
+            if (status === 'success' && account && invokedUpstream) {
+                sendTrajectoryAnalytics(account, model).catch(() => {});
             }
         }
     });
