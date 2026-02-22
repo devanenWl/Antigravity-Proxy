@@ -15,7 +15,7 @@ export const OAUTH_CONFIG = {
 
 // Antigravity API 配置
 export const ANTIGRAVITY_CONFIG = {
-    base_url: 'https://daily-cloudcode-pa.sandbox.googleapis.com',
+    base_url: 'https://daily-cloudcode-pa.googleapis.com',
     user_agent: 'antigravity/1.18.3 windows/amd64'
 };
 
