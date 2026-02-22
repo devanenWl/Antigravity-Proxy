@@ -39,6 +39,7 @@ type Request struct {
 	ConfigPath string            `json:"config_path"`
 	Timeout    TimeoutConfig     `json:"timeout"`
 	Proxy      *ProxyConfig      `json:"proxy,omitempty"`
+	ALPN       *bool             `json:"alpn,omitempty"`
 }
 
 // ── tls_config.json ──
@@ -181,7 +182,8 @@ func main() {
 	addr := net.JoinHostPort(host, port)
 
 	// 4. Build ClientHelloSpec
-	spec := buildClientHelloSpec(&cfg.Fingerprint, host)
+	includeALPN := req.ALPN != nil && *req.ALPN
+	spec := buildClientHelloSpec(&cfg.Fingerprint, host, includeALPN)
 
 	// 5. Establish TCP connection
 	connectTimeout := time.Duration(req.Timeout.Connect) * time.Second
@@ -262,22 +264,25 @@ func main() {
 	// when unmarshaling into map[string]string via iteration order (Go 1.12+: random).
 	// We need to preserve the original order from JSON. Use a custom ordered approach.
 	orderedHeaders := parseOrderedHeaders(input)
+	hasTransferEncoding := false
 	hasContentLength := false
 	for _, kv := range orderedHeaders {
 		httpReq += fmt.Sprintf("%s: %s\r\n", kv[0], kv[1])
+		if strings.EqualFold(kv[0], "Transfer-Encoding") {
+			hasTransferEncoding = true
+		}
 		if strings.EqualFold(kv[0], "Content-Length") {
 			hasContentLength = true
 		}
 	}
 
-	// Auto-add Content-Length if body is present and header is missing
-	if req.Body != "" && !hasContentLength {
+	// If caller provided Transfer-Encoding: chunked, use chunked encoding.
+	// Otherwise auto-add Content-Length for bodies (matching real client behavior:
+	// only streamGenerateContent uses chunked, all other endpoints use Content-Length).
+	useChunked := hasTransferEncoding
+	if req.Body != "" && !hasContentLength && !hasTransferEncoding {
 		httpReq += fmt.Sprintf("Content-Length: %d\r\n", len(req.Body))
 	}
-
-	// Force Connection: close so server closes connection after response,
-	// allowing io.Copy to reach EOF immediately instead of waiting for read timeout.
-	httpReq += "Connection: close\r\n"
 
 	httpReq += "\r\n"
 
@@ -286,8 +291,23 @@ func main() {
 	}
 
 	if req.Body != "" {
-		if _, err := io.WriteString(tlsConn, req.Body); err != nil {
-			fatal("failed to write request body: " + err.Error())
+		if useChunked {
+			// Write body in chunked encoding: <hex-size>\r\n<data>\r\n0\r\n\r\n
+			chunk := []byte(req.Body)
+			chunkHeader := fmt.Sprintf("%x\r\n", len(chunk))
+			if _, err := io.WriteString(tlsConn, chunkHeader); err != nil {
+				fatal("failed to write chunk header: " + err.Error())
+			}
+			if _, err := tlsConn.Write(chunk); err != nil {
+				fatal("failed to write chunk data: " + err.Error())
+			}
+			if _, err := io.WriteString(tlsConn, "\r\n0\r\n\r\n"); err != nil {
+				fatal("failed to write chunk terminator: " + err.Error())
+			}
+		} else {
+			if _, err := io.WriteString(tlsConn, req.Body); err != nil {
+				fatal("failed to write request body: " + err.Error())
+			}
 		}
 	}
 
@@ -358,7 +378,7 @@ func parseOrderedHeaders(raw []byte) [][2]string {
 	return result
 }
 
-func buildClientHelloSpec(fp *FingerprintConfig, serverName string) utls.ClientHelloSpec {
+func buildClientHelloSpec(fp *FingerprintConfig, serverName string, includeALPN bool) utls.ClientHelloSpec {
 	// Cipher suites
 	var cipherSuites []uint16
 	for _, name := range fp.Ciphers {
@@ -380,6 +400,9 @@ func buildClientHelloSpec(fp *FingerprintConfig, serverName string) utls.ClientH
 	// Build extensions
 	var extensions []utls.TLSExtension
 	for _, ext := range fp.Extensions {
+		if ext.Name == "alpn" && !includeALPN {
+			continue
+		}
 		e := buildExtension(ext, fp, serverName)
 		if e != nil {
 			extensions = append(extensions, e)
@@ -461,6 +484,18 @@ func buildExtension(ext ExtensionConfig, fp *FingerprintConfig, serverName strin
 			}
 		}
 		return &utls.SignatureAlgorithmsCertExtension{SupportedSignatureAlgorithms: algs}
+
+	case "alpn":
+		var data struct {
+			Protocols []string `json:"protocols"`
+		}
+		if ext.Data != nil {
+			json.Unmarshal(ext.Data, &data)
+		}
+		if len(data.Protocols) == 0 {
+			data.Protocols = []string{"h2", "http/1.1"}
+		}
+		return &utls.ALPNExtension{AlpnProtocols: data.Protocols}
 
 	case "supported_versions":
 		var data struct {

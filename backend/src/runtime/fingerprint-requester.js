@@ -91,7 +91,7 @@ function decompressGzip(buffer) {
  * @returns {Promise<{ ok, status, statusText, headers, text(), json(), body }>}
  */
 function binaryFetch(url, options = {}) {
-    const { method = 'GET', headers = {}, body, signal, timeout = 120 } = options;
+    const { method = 'GET', headers = {}, body, signal, timeout = 120, alpn } = options;
 
     const requestPayload = {
         method: method.toUpperCase(),
@@ -102,6 +102,7 @@ function binaryFetch(url, options = {}) {
         timeout: { connect: 30, read: timeout },
     };
 
+    if (alpn !== undefined) requestPayload.alpn = !!alpn;
     const proxy = getProxyConfig();
     if (proxy) requestPayload.proxy = proxy;
 
@@ -230,7 +231,7 @@ function binaryFetch(url, options = {}) {
  * @returns {Promise<{ ok, status, statusText, headers, body: ReadableStream }>}
  */
 function streamBinaryFetch(url, options = {}) {
-    const { method = 'GET', headers = {}, body, signal, timeout = 300 } = options;
+    const { method = 'GET', headers = {}, body, signal, timeout = 300, alpn } = options;
 
     const requestPayload = {
         method: method.toUpperCase(),
@@ -240,6 +241,7 @@ function streamBinaryFetch(url, options = {}) {
         config_path: CONFIG_PATH,
         timeout: { connect: 30, read: timeout },
     };
+    if (alpn !== undefined) requestPayload.alpn = !!alpn;
     const proxy = getProxyConfig();
     if (proxy) requestPayload.proxy = proxy;
 

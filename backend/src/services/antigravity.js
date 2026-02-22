@@ -98,9 +98,9 @@ export async function streamChat(account, request, onData, onError, signal = nul
             headers: {
                 'Host': API_HOST,
                 'User-Agent': USER_AGENT,
+                'Transfer-Encoding': 'chunked',
                 'Authorization': `Bearer ${account.access_token}`,
                 'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
                 'Accept-Encoding': 'gzip'
             },
             body: JSON.stringify(request),

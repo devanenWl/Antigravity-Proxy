@@ -97,6 +97,12 @@
         }
       },
       {
+        "name": "alpn",
+        "data": {
+          "protocols": ["h2", "http/1.1"]
+        }
+      },
+      {
         "name": "supported_versions",
         "data": {
           "versions": ["0x0304", "0x0303"]

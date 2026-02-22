@@ -34,10 +34,7 @@ export async function refreshAccessToken(account) {
         const response = await fetch(OAUTH_CONFIG.token_endpoint, {
             method: 'POST',
             headers: {
-                'Host': 'oauth2.googleapis.com',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Go-http-client/1.1',
-                'Accept-Encoding': 'gzip'
+                'Content-Type': 'application/x-www-form-urlencoded'
             },
             body: new URLSearchParams({
                 client_id: OAUTH_CONFIG.client_id,
@@ -508,8 +505,8 @@ export async function fetchEmail(account) {
             method: 'GET',
             headers: {
                 'Host': 'www.googleapis.com',
-                'Authorization': `Bearer ${account.access_token}`,
                 'User-Agent': 'Go-http-client/1.1',
+                'Authorization': `Bearer ${account.access_token}`,
                 'Accept-Encoding': 'gzip'
             }
         });

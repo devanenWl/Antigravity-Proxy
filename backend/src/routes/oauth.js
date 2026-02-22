@@ -22,10 +22,7 @@ export default async function oauthRoutes(fastify) {
             const tokenResponse = await fetch(OAUTH_CONFIG.token_endpoint, {
                 method: 'POST',
                 headers: {
-                    'Host': 'oauth2.googleapis.com',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': 'Go-http-client/1.1',
-                    'Accept-Encoding': 'gzip'
+                    'Content-Type': 'application/x-www-form-urlencoded'
                 },
                 body: new URLSearchParams({
                     client_id: OAUTH_CONFIG.client_id,
@@ -60,8 +57,8 @@ export default async function oauthRoutes(fastify) {
                 const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                     headers: {
                         'Host': 'www.googleapis.com',
-                        'Authorization': `Bearer ${access_token}`,
                         'User-Agent': 'Go-http-client/1.1',
+                        'Authorization': `Bearer ${access_token}`,
                         'Accept-Encoding': 'gzip'
                     }
                 });
