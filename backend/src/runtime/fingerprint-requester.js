@@ -3,7 +3,10 @@
  * 通过调用外部 Go 二进制发送带正确 TLS 指纹的 HTTP 请求，
  * 避免 Node.js 原生 TLS 握手特征暴露。
  *
- * 二进制位于 src/bin/fingerprint_linux_amd64
+ * 二进制位于 src/bin/ 目录，按平台自动选择：
+ *   - fingerprint_linux_amd64
+ *   - fingerprint_windows_amd64.exe
+ *
  * TLS 配置位于 src/bin/tls_config.json
  *
  * 对外暴露 fingerprintFetch(url, options) 接口，与原生 fetch() 接口对齐。
@@ -15,9 +18,30 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import zlib from 'zlib';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const BIN_DIR = join(__dirname, '..', 'bin');
-const BINARY_PATH = join(BIN_DIR, 'fingerprint_linux_amd64');
+// 按平台选择二进制文件名
+function getBinaryName() {
+    const platform = process.platform;   // 'linux', 'win32', 'darwin'
+    const arch = process.arch;           // 'x64', 'arm64'
+    if (platform === 'win32') return 'fingerprint_windows_amd64.exe';
+    if (platform === 'linux' && arch === 'arm64') return 'fingerprint_linux_arm64';
+    if (platform === 'linux') return 'fingerprint_linux_amd64';
+    if (platform === 'darwin' && arch === 'arm64') return 'fingerprint_darwin_arm64';
+    if (platform === 'darwin') return 'fingerprint_darwin_amd64';
+    return `fingerprint_${platform}_${arch}`;
+}
+
+// 解析 bin 目录：支持源码运行和 pkg 打包两种模式
+function resolveBinDir() {
+    // pkg 打包后，process.execPath 指向可执行文件，查找同目录下的 bin/
+    const pkgBinDir = join(dirname(process.execPath), 'bin');
+    if (existsSync(pkgBinDir)) return pkgBinDir;
+    // 源码运行：相对于当前文件的 ../bin
+    const __dir = dirname(fileURLToPath(import.meta.url));
+    return join(__dir, '..', 'bin');
+}
+
+const BIN_DIR = resolveBinDir();
+const BINARY_PATH = join(BIN_DIR, getBinaryName());
 const CONFIG_PATH = join(BIN_DIR, 'tls_config.json');
 
 let _available = null; // 懒初始化：null=未检测, true/false

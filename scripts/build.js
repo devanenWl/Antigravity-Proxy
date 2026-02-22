@@ -25,11 +25,11 @@ const releaseDir = path.join(distDir, 'release');
 
 // 目标平台配置
 const TARGETS = {
-    'linux-x64': { pkg: 'node18-linux-x64', outExt: '' },
-    'linux-arm64': { pkg: 'node18-linux-arm64', outExt: '' },
-    'win-x64': { pkg: 'node18-win-x64', outExt: '.exe' },
-    'macos-x64': { pkg: 'node18-macos-x64', outExt: '' },
-    'macos-arm64': { pkg: 'node18-macos-arm64', outExt: '' }
+    'linux-x64': { pkg: 'node18-linux-x64', outExt: '', fpBin: 'fingerprint_linux_amd64' },
+    'linux-arm64': { pkg: 'node18-linux-arm64', outExt: '', fpBin: 'fingerprint_linux_arm64' },
+    'win-x64': { pkg: 'node18-win-x64', outExt: '.exe', fpBin: 'fingerprint_windows_amd64.exe' },
+    'macos-x64': { pkg: 'node18-macos-x64', outExt: '', fpBin: 'fingerprint_darwin_amd64' },
+    'macos-arm64': { pkg: 'node18-macos-arm64', outExt: '', fpBin: 'fingerprint_darwin_arm64' }
 };
 
 function usage() {
@@ -156,7 +156,7 @@ async function main() {
         usage();
         throw new Error(`Invalid or missing --target. Got: ${target ?? '(none)'}`);
     }
-    const { pkg: pkgTarget, outExt } = TARGETS[target];
+    const { pkg: pkgTarget, outExt, fpBin } = TARGETS[target];
 
     // 读取版本号
     const backendPkg = JSON.parse(fs.readFileSync(path.join(backendDir, 'package.json'), 'utf8'));
@@ -266,6 +266,18 @@ async function main() {
         copyFileSync(envExampleSrc, path.join(archiveDir, '.env.example'));
     }
 
+    // 复制 TLS 指纹二进制和配置到打包目录 (bin/ 子目录)
+    const fpBinSrc = path.join(backendDir, 'src', 'bin', fpBin);
+    const tlsConfigSrc = path.join(backendDir, 'src', 'bin', 'tls_config.json');
+    const archiveBinDir = path.join(archiveDir, 'bin');
+    if (fs.existsSync(fpBinSrc)) {
+        copyFileSync(fpBinSrc, path.join(archiveBinDir, fpBin));
+        copyFileSync(tlsConfigSrc, path.join(archiveBinDir, 'tls_config.json'));
+        console.log(`  ✓ Copied TLS fingerprint binary: ${fpBin}`);
+    } else {
+        console.warn(`  ⚠ TLS fingerprint binary not found: ${fpBinSrc} (will fall back to native fetch)`);
+    }
+
     // 创建压缩包
     const isWindows = target.includes('win');
     let archiveName = isWindows
@@ -313,6 +325,10 @@ async function main() {
     console.log(`📦 Archive contents:`);
     console.log(`   - ${outName}`);
     console.log(`   - .env.example`);
+    if (fs.existsSync(fpBinSrc)) {
+        console.log(`   - bin/${fpBin}`);
+        console.log(`   - bin/tls_config.json`);
+    }
 }
 
 main().catch((err) => {
