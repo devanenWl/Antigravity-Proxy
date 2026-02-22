@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -261,9 +262,22 @@ func main() {
 	// when unmarshaling into map[string]string via iteration order (Go 1.12+: random).
 	// We need to preserve the original order from JSON. Use a custom ordered approach.
 	orderedHeaders := parseOrderedHeaders(input)
+	hasContentLength := false
 	for _, kv := range orderedHeaders {
 		httpReq += fmt.Sprintf("%s: %s\r\n", kv[0], kv[1])
+		if strings.EqualFold(kv[0], "Content-Length") {
+			hasContentLength = true
+		}
 	}
+
+	// Auto-add Content-Length if body is present and header is missing
+	if req.Body != "" && !hasContentLength {
+		httpReq += fmt.Sprintf("Content-Length: %d\r\n", len(req.Body))
+	}
+
+	// Force Connection: close so server closes connection after response,
+	// allowing io.Copy to reach EOF immediately instead of waiting for read timeout.
+	httpReq += "Connection: close\r\n"
 
 	httpReq += "\r\n"
 
@@ -277,35 +291,31 @@ func main() {
 		}
 	}
 
-	// 8. Read and forward response to stdout
+	// 8. Read and forward response to stdout using http.ReadResponse
+	//    This properly handles chunked Transfer-Encoding and Content-Length.
 	reader := bufio.NewReader(tlsConn)
-
-	// Read status line
-	statusLine, err := reader.ReadString('\n')
+	resp, err := http.ReadResponse(reader, nil)
 	if err != nil {
-		fatal("failed to read response status: " + err.Error())
+		fatal("failed to read response: " + err.Error())
 	}
-	os.Stdout.WriteString(statusLine)
+	defer resp.Body.Close()
 
-	// Read headers until empty line
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			fatal("failed to read response headers: " + err.Error())
-		}
-		os.Stdout.WriteString(line)
-		if line == "\r\n" || line == "\n" {
-			break
-		}
-	}
+	// Write status line
+	fmt.Fprintf(os.Stdout, "HTTP/%d.%d %d %s\r\n", resp.ProtoMajor, resp.ProtoMinor, resp.StatusCode, http.StatusText(resp.StatusCode))
 
-	// Stream body to stdout
-	if _, err := io.Copy(os.Stdout, reader); err != nil {
-		// Connection may be closed by server after full response; ignore EOF
-		if err != io.EOF && !strings.Contains(err.Error(), "use of closed") {
-			// Non-fatal: response may already be complete
+	// Write headers (preserving all except Transfer-Encoding, since body is decoded)
+	for key, values := range resp.Header {
+		if strings.EqualFold(key, "Transfer-Encoding") {
+			continue
+		}
+		for _, v := range values {
+			fmt.Fprintf(os.Stdout, "%s: %s\r\n", key, v)
 		}
 	}
+	fmt.Fprint(os.Stdout, "\r\n")
+
+	// Stream decoded body to stdout
+	io.Copy(os.Stdout, resp.Body)
 }
 
 // parseOrderedHeaders extracts headers from the raw JSON input preserving order.
