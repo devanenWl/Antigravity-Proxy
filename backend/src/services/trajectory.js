@@ -146,17 +146,136 @@ function buildGeneratorMetadata(qa) {
     ];
 }
 
+function buildSteps(executionId, trajectoryId, cascadeId, qa) {
+    return [
+        // Step 0: user input
+        {
+            metadata: {
+                createdAt: generateCreatedAt(),
+                executionId,
+                internalMetadata: {
+                    statusTransitions: [{ timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_DONE' }]
+                },
+                source: 'CORTEX_STEP_SOURCE_USER_EXPLICIT'
+            },
+            status: 'CORTEX_STEP_STATUS_DONE',
+            type: 'CORTEX_STEP_TYPE_USER_INPUT',
+            userInput: {
+                activeUserState: {},
+                clientType: 'CHAT_CLIENT_REQUEST_STREAM_CLIENT_TYPE_IDE',
+                items: [{ text: qa.question }],
+                userConfig: {
+                    conversationHistoryConfig: { enabled: true },
+                    plannerConfig: {
+                        conversational: { agenticMode: true, plannerMode: 'CONVERSATIONAL_PLANNER_MODE_DEFAULT' },
+                        ephemeralMessagesConfig: { enabled: true },
+                        knowledgeConfig: { enabled: true },
+                        requestedModel: { model: 'MODEL_PLACEHOLDER_M12' },
+                        toolConfig: {
+                            notifyUser: { artifactReviewMode: 'ARTIFACT_REVIEW_MODE_ALWAYS' },
+                            runCommand: { autoCommandConfig: { autoExecutionPolicy: 'CASCADE_COMMANDS_AUTO_EXECUTION_OFF' } }
+                        }
+                    }
+                },
+                userResponse: qa.question
+            }
+        },
+        // Step 1: conversation history
+        {
+            conversationHistory: { content: '' },
+            metadata: {
+                completedAt: generateCreatedAt(),
+                createdAt: generateCreatedAt(),
+                executionId,
+                internalMetadata: {
+                    statusTransitions: [
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_PENDING' },
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_RUNNING' },
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_DONE' }
+                    ]
+                },
+                source: 'CORTEX_STEP_SOURCE_SYSTEM',
+                status: 'CORTEX_STEP_STATUS_DONE',
+                type: 'CORTEX_STEP_TYPE_CONVERSATION_HISTORY'
+            }
+        },
+        // Step 2: ephemeral message
+        {
+            ephemeralMessage: { content: '', triggeredHeuristics: ['artifact_reminder', 'no_active_task_reminder'] },
+            metadata: {
+                completedAt: generateCreatedAt(),
+                createdAt: generateCreatedAt(),
+                executionId,
+                internalMetadata: {
+                    statusTransitions: [
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_PENDING' },
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_RUNNING' },
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_DONE' }
+                    ]
+                },
+                source: 'CORTEX_STEP_SOURCE_SYSTEM'
+            },
+            status: 'CORTEX_STEP_STATUS_DONE',
+            type: 'CORTEX_STEP_TYPE_EPHEMERAL_MESSAGE'
+        },
+        // Step 3: planner response
+        {
+            metadata: {
+                completedAt: generateCreatedAt(),
+                createdAt: generateCreatedAt(),
+                executionId,
+                finishedGeneratingAt: generateCreatedAt(),
+                generatorModel: 'MODEL_PLACEHOLDER_M12',
+                internalMetadata: {
+                    statusTransitions: [
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_GENERATING' },
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_DONE' }
+                    ]
+                },
+                requestedModel: { model: 'MODEL_PLACEHOLDER_M12' },
+                source: 'CORTEX_STEP_SOURCE_MODEL',
+                sourceTrajectoryStepInfo: { cascadeId, stepIndex: 3, trajectoryId },
+                stepGenerationVersion: 1,
+                viewableAt: generateCreatedAt()
+            },
+            plannerResponse: {
+                messageId: `bot-${crypto.randomUUID()}`,
+                modifiedResponse: qa.answer,
+                response: qa.answer
+            },
+            status: 'CORTEX_STEP_STATUS_DONE',
+            type: 'CORTEX_STEP_TYPE_PLANNER_RESPONSE'
+        },
+        // Step 4: checkpoint
+        {
+            checkpoint: { intentOnly: true },
+            metadata: {
+                createdAt: generateCreatedAt(),
+                executionId,
+                internalMetadata: {
+                    statusTransitions: [
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_PENDING' },
+                        { timestamp: generateCreatedAt(), updatedStatus: 'CORTEX_STEP_STATUS_RUNNING' }
+                    ]
+                },
+                source: 'CORTEX_STEP_SOURCE_SYSTEM'
+            },
+            status: 'CORTEX_STEP_STATUS_RUNNING',
+            type: 'CORTEX_STEP_TYPE_CHECKPOINT'
+        }
+    ];
+}
+
 function buildTrajectoryPayload(account, requestId) {
     const qa = randomQAPair();
     const cascadeId = crypto.randomUUID();
+    const executionId = crypto.randomUUID();
     // 从 requestId 派生 trajectoryId（与 antigravity2api 一致）
     const trajectoryId = requestId?.split('/')[2] || crypto.randomUUID();
 
     return {
         trajectory: {
             cascadeId,
-            trajectoryId,
-            trajectoryType: 'CORTEX_TRAJECTORY_TYPE_CASCADE',
             executorMetadatas: [{
                 lastStepIdx: 4,
                 numGeneratorInvocations: 1,
@@ -166,7 +285,11 @@ function buildTrajectoryPayload(account, requestId) {
             metadata: {
                 createdAt: generateCreatedAt(),
                 initializationStateId: crypto.randomUUID()
-            }
+            },
+            source: 'CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT',
+            steps: buildSteps(executionId, trajectoryId, cascadeId, qa),
+            trajectoryId,
+            trajectoryType: 'CORTEX_TRAJECTORY_TYPE_CASCADE'
         },
         metadata: generateMetadata(account)
     };

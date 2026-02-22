@@ -197,6 +197,7 @@ export default async function openaiRoutes(fastify) {
                     buildRequest: (a) => {
                         const req = structuredClone(antigravityRequestBase);
                         req.project = a.project_id || '';
+                        if (a.session_id) req.request.sessionId = a.session_id;
                         return req;
                     },
                     execute: async (a, req) => {

@@ -227,8 +227,6 @@ export default async function geminiRoutes(fastify) {
 
                     const out = await runChatWithCapacityRetry({
                         model,
-                        maxRetries,
-                        baseRetryDelayMs,
                         accountPool,
                         buildRequest: () => countTokensBody,
                         execute: async (a, req) => {
