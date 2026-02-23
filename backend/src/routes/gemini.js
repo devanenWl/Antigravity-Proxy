@@ -5,7 +5,7 @@ import { accountPool } from '../services/accountPool.js';
 import { acquireModelSlot, releaseModelSlot } from '../services/rateLimiter.js';
 import { streamChat, chat, countTokens, fetchAvailableModels } from '../services/antigravity.js';
 import { createRequestLog } from '../db/index.js';
-import { getMappedModel } from '../config.js';
+import { getMappedModel, getSafetySettings } from '../config.js';
 import { logModelCall } from '../services/modelLogger.js';
 import { isCapacityError, isAuthenticationError, parseResetAfterMs, SSE_HEADERS } from '../utils/route-helpers.js';
 import { createAbortController, runChatWithFullRetry, runStreamChatWithFullRetry, runChatWithCapacityRetry, runStreamChatWithCapacityRetry } from '../utils/request-handler.js';
@@ -268,19 +268,7 @@ export default async function geminiRoutes(fastify) {
                         ...innerRequest,
                         sessionId: innerRequest.sessionId || generateSessionId(),
                         // 禁用 Gemini 安全过滤，避免 "no candidates" 错误
-                        safetySettings: innerRequest.safetySettings || [
-                            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_UNSPECIFIED', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_IMAGE_HATE', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_IMAGE_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_IMAGE_HARASSMENT', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_IMAGE_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                            { category: 'HARM_CATEGORY_JAILBREAK', threshold: 'BLOCK_NONE' }
-                        ]
+                        safetySettings: innerRequest.safetySettings || getSafetySettings(model)
                     },
                     model,
                     userAgent: 'antigravity',

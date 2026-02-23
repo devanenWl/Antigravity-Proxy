@@ -17,13 +17,15 @@
 
 ## 支持模型
 
-| Gemini | Claude | OpenAI |
-|--------|--------|--------|
-| gemini-3-flash | claude-opus-4-5 | gpt-oss-120b-medium |
-| gemini-3-flash-thinking | claude-opus-4-5-thinking | |
-| gemini-3-pro-high/low | claude-sonnet-4-5 | |
-| gemini-2.5-pro/flash | claude-sonnet-4-5-thinking | |
-| gemini-3-pro-image | | |
+| Gemini | Claude |
+|--------|--------|
+| gemini-3-flash | claude-opus-4-6 |
+| gemini-3-flash-thinking | claude-opus-4-6-thinking |
+| gemini-3.1-pro-high/low | claude-sonnet-4-6 |
+| gemini-2.5-pro/flash | claude-sonnet-4-6-thinking |
+| gemini-2.5-flash-thinking | |
+| gemini-2.5-flash-lite | |
+| gemini-3-pro-image | |
 
 ## 快速开始
 

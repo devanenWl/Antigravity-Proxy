@@ -77,8 +77,6 @@ export const AVAILABLE_MODELS = [
     { id: 'gemini-3-flash', displayName: 'Gemini 3 Flash', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65536 },
     // 兼容：通过模型名显式启用 thinking（映射到 gemini-3-flash）
     { id: 'gemini-3-flash-thinking', displayName: 'Gemini 3 Flash (Thinking)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65536 },
-    { id: 'gemini-3-pro-high', displayName: 'Gemini 3 Pro (High)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
-    { id: 'gemini-3-pro-low', displayName: 'Gemini 3 Pro (Low)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-2.5-flash-thinking', displayName: 'Gemini 2.5 Flash (Thinking)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
@@ -86,13 +84,10 @@ export const AVAILABLE_MODELS = [
     { id: 'gemini-3.1-pro-high', displayName: 'Gemini 3.1 Pro (High)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-3.1-pro-low', displayName: 'Gemini 3.1 Pro (Low)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-3-pro-image', displayName: 'Gemini 3 Pro Image', provider: 'google', supportsImages: true, supportsThinking: true },
-    // 上游内部 revision 模型：可以调用，但小 max_tokens 可能只输出思考 token 而无文本 parts
-    { id: 'rev19-uic3-1p', displayName: 'rev19-uic3-1p', provider: 'google', supportsImages: false, supportsThinking: false },
     { id: 'claude-opus-4-6', displayName: 'Claude Opus 4.6', provider: 'anthropic', supportsImages: true, supportsThinking: false, maxTokens: 200000, maxOutputTokens: 64000 },
     { id: 'claude-opus-4-6-thinking', displayName: 'Claude Opus 4.6 (Thinking)', provider: 'anthropic', supportsImages: true, supportsThinking: true, maxTokens: 200000, maxOutputTokens: 64000 },
     { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', provider: 'anthropic', supportsImages: true, supportsThinking: false, maxTokens: 200000, maxOutputTokens: 64000 },
     { id: 'claude-sonnet-4-6-thinking', displayName: 'Claude Sonnet 4.6 (Thinking)', provider: 'anthropic', supportsImages: true, supportsThinking: true, maxTokens: 200000, maxOutputTokens: 64000 },
-    { id: 'gpt-oss-120b-medium', displayName: 'GPT-OSS 120B (Medium)', provider: 'openai', supportsImages: false, supportsThinking: true, maxTokens: 131072, maxOutputTokens: 32768 }
 ];
 
 // 模型名称映射（用户请求的模型 -> 实际发送的模型）
@@ -127,14 +122,11 @@ export const THINKING_MODELS = [
     'gemini-2.5-pro',
     'gemini-2.5-flash-thinking',
     'gemini-3-flash-thinking',
-    'gemini-3-pro-high',
-    'gemini-3-pro-low',
     'gemini-3.1-pro-high',
     'gemini-3.1-pro-low',
     'gemini-3-pro-image',
     'claude-opus-4-6-thinking',
-    'claude-sonnet-4-6-thinking',
-    'gpt-oss-120b-medium'
+    'claude-sonnet-4-6-thinking'
 ];
 
 // 判断模型是否启用思维链
@@ -152,6 +144,29 @@ export function isImageGenerationModel(model) {
 // 获取实际发送的模型名称
 export function getMappedModel(model) {
     return MODEL_MAPPING[model] || model;
+}
+
+// Safety settings：完整版（11 类）和基础版（5 类）
+const FULL_SAFETY_SETTINGS = [
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_UNSPECIFIED', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_IMAGE_HATE', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_IMAGE_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_IMAGE_HARASSMENT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_IMAGE_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_JAILBREAK', threshold: 'BLOCK_NONE' }
+];
+
+const BASIC_SAFETY_SETTINGS = FULL_SAFETY_SETTINGS.slice(0, 5);
+
+const BASIC_SAFETY_MODELS = new Set(['gemini-2.5-flash-lite']);
+
+export function getSafetySettings(model) {
+    return BASIC_SAFETY_MODELS.has(model) ? BASIC_SAFETY_SETTINGS : FULL_SAFETY_SETTINGS;
 }
 
 // ========= 集中配置（供 routes / converter 共用） =========

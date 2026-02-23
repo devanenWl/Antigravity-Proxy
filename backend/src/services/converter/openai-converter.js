@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-import { AVAILABLE_MODELS, getMappedModel, isThinkingModel, isImageGenerationModel } from '../../config.js';
+import { AVAILABLE_MODELS, getMappedModel, isThinkingModel, isImageGenerationModel, getSafetySettings } from '../../config.js';
 
 import { injectClaudeToolRequiredArgPlaceholderIntoArgs, injectClaudeToolRequiredArgPlaceholderIntoSchema, needsClaudeToolRequiredArgPlaceholder, stripClaudeToolRequiredArgPlaceholderFromArgs } from './claude-tool-placeholder.js';
 import { convertJsonSchema, generateSessionId, parseDataUrl } from './schema-converter.js';
@@ -633,19 +633,7 @@ export function convertOpenAIToAntigravity(openaiRequest, projectId = '', sessio
             generationConfig,
             sessionId: sessionId || generateSessionId(),
             // 禁用 Gemini 安全过滤，避免 "no candidates" 错误
-            safetySettings: [
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_UNSPECIFIED', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_IMAGE_HATE', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_IMAGE_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_IMAGE_HARASSMENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_IMAGE_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_JAILBREAK', threshold: 'BLOCK_NONE' }
-            ]
+            safetySettings: getSafetySettings(actualModel)
         },
         model: actualModel,
         userAgent: 'antigravity',
