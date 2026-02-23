@@ -161,11 +161,12 @@ const FULL_SAFETY_SETTINGS = [
     { category: 'HARM_CATEGORY_JAILBREAK', threshold: 'BLOCK_NONE' }
 ];
 
-const BASIC_SAFETY_SETTINGS = FULL_SAFETY_SETTINGS.slice(0, 5);
+const BASIC_SAFETY_SETTINGS = FULL_SAFETY_SETTINGS.slice(0, 4);
 
 const BASIC_SAFETY_MODELS = new Set(['gemini-2.5-flash-lite']);
 
 export function getSafetySettings(model) {
+    if (!model || model.startsWith('claude-') || model.startsWith('gpt-')) return undefined;
     return BASIC_SAFETY_MODELS.has(model) ? BASIC_SAFETY_SETTINGS : FULL_SAFETY_SETTINGS;
 }
 
