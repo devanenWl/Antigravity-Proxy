@@ -17,11 +17,13 @@ const TELEMETRY_JITTER_MS = 5 * 60_000;   // 额外 0~5 分钟随机
 
 let _intervalId = null;
 
-// 构造精确到纳秒的 ISO 时间戳
+// 构造精确到纳秒的 ISO 时间戳（毫秒后填充随机纳秒）
 function generateCreatedAt() {
     const now = new Date();
-    const nanos = String(now.getMilliseconds()).padStart(3, '0') + '000000';
-    return now.toISOString().replace(/\.\d{3}Z$/, `.${nanos}Z`);
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+    const micro = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+    const nano = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+    return now.toISOString().replace(/\.\d{3}Z$/, `.${ms}${micro}${nano}Z`);
 }
 
 /**
@@ -29,9 +31,9 @@ function generateCreatedAt() {
  * 匹配 antigravity2api 的 buildRecordCodeAssistMetricsBody 结构
  */
 function buildMetrics(account, trajectoryId) {
-    const traceId = crypto.randomUUID().replace(/-/g, '');
-    const firstLatency = (Math.random() * 5 + 1).toFixed(9);
-    const totalLatency = (Math.random() * 10 + 5).toFixed(9);
+    const traceId = crypto.randomBytes(8).toString('hex');
+    const firstLatency = (Math.random() * 5 + 0.5).toFixed(9);
+    const totalLatency = (parseFloat(firstLatency) + Math.random() * 2 + 0.01).toFixed(9);
 
     return {
         project: account.project_id || '',
