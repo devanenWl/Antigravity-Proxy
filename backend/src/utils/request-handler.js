@@ -4,19 +4,8 @@ import { RETRY_CONFIG } from '../config.js';
 import { forceRefreshToken } from '../services/tokenManager.js';
 import { createRequestAttemptLog, updateAccountStatus } from '../db/index.js';
 
-function getLastUsedAccountId(accountPool) {
-    const n = Number(accountPool?.lastUsedAccountId);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    return n;
-}
-
-function createRequestScopedAccountGetter({ accountPool, model, availableCount = null }) {
+function createRequestScopedAccountGetter({ accountPool, model }) {
     const excludedAccountIds = new Set();
-
-    // Strict global round-robin requirement:
-    // do NOT allow a request to "wrap around" and try the account used immediately before it started.
-    const prev = getLastUsedAccountId(accountPool);
-    if (prev && Number(availableCount || 0) > 1) excludedAccountIds.add(prev);
 
     return async () => {
         const account = await accountPool.getNextAccount(model, {
@@ -85,18 +74,13 @@ export async function runChatWithCapacityRetry({
     const availableCount = typeof accountPool?.getAvailableAccountCount === 'function'
         ? accountPool.getAvailableAccountCount(model)
         : 0;
-    // 尽量轮询完一遍账号池，但避免在同一个请求里“绕一圈又回到上一次用过的账号”。
     // withCapacityRetry 的总尝试次数 = maxRetries + 2，因此这里把 maxRetries 控制在“最多尝试 maxUniqueAccounts 次”。
-    const prevAccountId = getLastUsedAccountId(accountPool);
-    const maxUniqueAccounts = Math.max(
-        0,
-        availableCount - (prevAccountId && availableCount > 1 ? 1 : 0)
-    );
+    const maxUniqueAccounts = Math.max(0, availableCount);
     const maxRetriesByPool = Math.max(0, maxUniqueAccounts - 2);
     const maxRetriesByConfig = Math.max(0, Number(maxRetries ?? RETRY_CONFIG.maxRetries ?? 0));
     const effectiveMaxRetries = Math.min(maxRetriesByPool, maxRetriesByConfig);
 
-    const getAccount = createRequestScopedAccountGetter({ accountPool, model, availableCount });
+    const getAccount = createRequestScopedAccountGetter({ accountPool, model });
 
     const out = await withCapacityRetry({
         maxRetries: effectiveMaxRetries,
@@ -168,11 +152,10 @@ export async function runChatWithFullRetry({
     const availableCount = typeof accountPool?.getAvailableAccountCount === 'function'
         ? accountPool.getAvailableAccountCount(model)
         : 0;
-    // Strict global round-robin: exclude the immediately previous account for this request.
-    // Allow switching through the full pool (excluding prev) when needed.
-    const maxAccountSwitches = Math.max(0, availableCount - 2);
+    // Allow switching through the full eligible pool when needed.
+    const maxAccountSwitches = Math.max(0, availableCount - 1);
 
-    const getAccount = createRequestScopedAccountGetter({ accountPool, model, availableCount });
+    const getAccount = createRequestScopedAccountGetter({ accountPool, model });
     let attemptNo = 0;
 
     const executeAndLog = async ({ account, antigravityRequest, accountAttempt, sameRetry, executeFn }) => {
@@ -299,18 +282,14 @@ export async function runStreamChatWithCapacityRetry({
     const availableCount = typeof accountPool?.getAvailableAccountCount === 'function'
         ? accountPool.getAvailableAccountCount(model)
         : 0;
-    // total attempts is capped by (effectiveMaxRetries + 1); keep it within one pool traversal (excluding prev).
-    const prevAccountId = getLastUsedAccountId(accountPool);
-    const maxUniqueAccounts = Math.max(
-        0,
-        availableCount - (prevAccountId && availableCount > 1 ? 1 : 0)
-    );
+    // total attempts is capped by (effectiveMaxRetries + 1); keep it within one pool traversal.
+    const maxUniqueAccounts = Math.max(0, availableCount);
     // Total attempts in the loop is effectively (effectiveMaxRetries + 2), so keep it within one traversal.
     const maxRetriesByPool = Math.max(0, maxUniqueAccounts - 2);
     const maxRetriesByConfig = Math.max(0, Number(maxRetries ?? RETRY_CONFIG.maxRetries ?? 0));
     const effectiveMaxRetries = Math.min(maxRetriesByPool, maxRetriesByConfig);
 
-    const getAccount = createRequestScopedAccountGetter({ accountPool, model, availableCount });
+    const getAccount = createRequestScopedAccountGetter({ accountPool, model });
 
     while (true) {
         attempt++;
@@ -398,9 +377,9 @@ export async function runStreamChatWithFullRetry({
     const availableCount = typeof accountPool?.getAvailableAccountCount === 'function'
         ? accountPool.getAvailableAccountCount(model)
         : 0;
-    const maxAccountSwitches = Math.max(0, availableCount - 2);
+    const maxAccountSwitches = Math.max(0, availableCount - 1);
 
-    const getAccount = createRequestScopedAccountGetter({ accountPool, model, availableCount });
+    const getAccount = createRequestScopedAccountGetter({ accountPool, model });
     let attemptNo = 0;
 
     const streamAndLog = async ({ account, antigravityRequest, accountAttempt, sameRetry, streamFn }) => {
