@@ -1,4 +1,4 @@
-import { isCapacityError, isNonRetryableError, isAuthenticationError, isRefreshTokenInvalidError, parseResetAfterMs, sleep, buildErrorMessage } from './route-helpers.js';
+import { isCapacityError, isNonRetryableError, isAuthenticationError, isRefreshTokenInvalidError, isServerCapacityExhaustedError, parseResetAfterMs, sleep, buildErrorMessage } from './route-helpers.js';
 import { withCapacityRetry, withFullRetry } from './retry-handler.js';
 import { RETRY_CONFIG } from '../config.js';
 import { forceRefreshToken } from '../services/tokenManager.js';
@@ -128,11 +128,18 @@ export async function runChatWithCapacityRetry({
             }
         },
         onCapacityError: async ({ account, error }) => {
-            const cooldownMs = accountPool.markCapacityLimited(account.id, model, error.message || '');
-            if (cooldownMs !== undefined && error && typeof error === 'object' && !Number.isFinite(error.retryAfterMs)) {
-                error.retryAfterMs = cooldownMs;
+            const serverCapacityExhausted = isServerCapacityExhaustedError(error);
+            if (!serverCapacityExhausted) {
+                const cooldownMs = accountPool.markCapacityLimited(account.id, model, error.message || '');
+                if (cooldownMs !== undefined && error && typeof error === 'object' && !Number.isFinite(error.retryAfterMs)) {
+                    error.retryAfterMs = cooldownMs;
+                }
             }
             accountPool.unlockAccount(account.id);
+        },
+        reuseSameAccountOnRetry: ({ error, capacity }) => {
+            if (!capacity) return false;
+            return isServerCapacityExhaustedError(error);
         }
     });
 
@@ -241,19 +248,23 @@ export async function runChatWithFullRetry({
         },
         shouldRetryOnSameAccount: ({ error, capacity }) => {
             if (error?.authHandled) return false;
-            if (capacity) return false;
+            if (capacity) return isServerCapacityExhaustedError(error);
             return true;
         },
         shouldSwitchAccount: ({ error, capacity }) => {
             if (error?.authHandled) return false;
+            if (capacity && isServerCapacityExhaustedError(error)) return false;
             if (capacity && availableCount <= 1) return false;
             return true;
         },
         onError: async ({ account, error, capacity }) => {
             if (capacity) {
-                const cooldownMs = accountPool.markCapacityLimited(account.id, model, error.message || '');
-                if (cooldownMs !== undefined && error && typeof error === 'object' && !Number.isFinite(error.retryAfterMs)) {
-                    error.retryAfterMs = cooldownMs;
+                const serverCapacityExhausted = isServerCapacityExhaustedError(error);
+                if (!serverCapacityExhausted) {
+                    const cooldownMs = accountPool.markCapacityLimited(account.id, model, error.message || '');
+                    if (cooldownMs !== undefined && error && typeof error === 'object' && !Number.isFinite(error.retryAfterMs)) {
+                        error.retryAfterMs = cooldownMs;
+                    }
                 }
             }
             accountPool.unlockAccount(account.id);
@@ -291,9 +302,11 @@ export async function runStreamChatWithCapacityRetry({
 
     const getAccount = createRequestScopedAccountGetter({ accountPool, model });
 
+    let currentAccount = null;
+
     while (true) {
         attempt++;
-        const account = await getAccount();
+        const account = currentAccount || await getAccount();
         const antigravityRequest = buildRequest(account);
         const startedAt = Date.now();
 
@@ -338,9 +351,12 @@ export async function runStreamChatWithCapacityRetry({
 
             const capacity = isCapacityError(error);
             if (capacity) {
-                const cooldownMs = accountPool.markCapacityLimited(account.id, model, error.message || '');
-                if (cooldownMs !== undefined && error && typeof error === 'object' && !Number.isFinite(error.retryAfterMs)) {
-                    error.retryAfterMs = cooldownMs;
+                const serverCapacityExhausted = isServerCapacityExhaustedError(error);
+                if (!serverCapacityExhausted) {
+                    const cooldownMs = accountPool.markCapacityLimited(account.id, model, error.message || '');
+                    if (cooldownMs !== undefined && error && typeof error === 'object' && !Number.isFinite(error.retryAfterMs)) {
+                        error.retryAfterMs = cooldownMs;
+                    }
                 }
                 accountPool.unlockAccount(account.id);
 
@@ -348,6 +364,7 @@ export async function runStreamChatWithCapacityRetry({
                 if (allowByOutput && attempt <= Math.max(0, Number(effectiveMaxRetries || 0)) + 1) {
                     const resetMs = parseResetAfterMs(error?.message);
                     const delay = resetMs ?? (Math.max(0, Number(baseRetryDelayMs || 0)) * attempt);
+                    currentAccount = serverCapacityExhausted ? account : null;
                     await sleep(delay);
                     continue;
                 }
@@ -482,9 +499,12 @@ export async function runStreamChatWithFullRetry({
                     return;
                 }
                 if (capacity) {
-                    const cooldownMs = accountPool.markCapacityLimited(account.id, model, error.message || '');
-                    if (cooldownMs !== undefined && error && typeof error === 'object' && !Number.isFinite(error.retryAfterMs)) {
-                        error.retryAfterMs = cooldownMs;
+                    const serverCapacityExhausted = isServerCapacityExhaustedError(error);
+                    if (!serverCapacityExhausted) {
+                        const cooldownMs = accountPool.markCapacityLimited(account.id, model, error.message || '');
+                        if (cooldownMs !== undefined && error && typeof error === 'object' && !Number.isFinite(error.retryAfterMs)) {
+                            error.retryAfterMs = cooldownMs;
+                        }
                     }
                 }
                 accountPool.unlockAccount(account.id);
@@ -497,13 +517,14 @@ export async function runStreamChatWithFullRetry({
                 if (abortSignal?.aborted) return false;
                 if (error?.authHandled) return false;
                 if (isNonRetryableError(error)) return false;
-                if (capacity) return false;
+                if (capacity) return isServerCapacityExhaustedError(error);
                 return true;
             },
             shouldSwitchAccount: ({ error, capacity }) => {
                 if (abortSignal?.aborted) return false;
                 if (error?.authHandled) return false;
                 if (isNonRetryableError(error)) return false;
+                if (capacity && isServerCapacityExhaustedError(error)) return false;
                 if (capacity && availableCount <= 1) return false;
                 if (typeof canRetry === 'function' && !canRetry({ error })) return false;
                 return true;
