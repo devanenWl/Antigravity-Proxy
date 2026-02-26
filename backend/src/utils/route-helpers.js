@@ -104,6 +104,9 @@ export function isRefreshTokenInvalidError(err) {
  * 注意：认证错误 (401/403) 不在此列，需要单独处理（刷新 token 后重试）
  */
 export function isNonRetryableError(err) {
+    // 版本过期错误可重试（versionFetcher 已刷新版本，重试会使用新版本）
+    if (err?.versionOutdated) return false;
+
     const msg = err?.message || '';
     const msgLower = msg.toLowerCase();
     const status = err?.upstreamStatus;

@@ -14,9 +14,24 @@ export const OAUTH_CONFIG = {
 };
 
 // Antigravity API 配置
+// 版本号由 versionFetcher 服务动态更新，支持热更新
+let _agVersion = '1.19.5'; // 默认回退值
+
+export function setAgVersion(version) {
+    if (version && typeof version === 'string' && /^\d+\.\d+\.\d+/.test(version)) {
+        _agVersion = version;
+    }
+}
+
+export function getAgVersion() {
+    return _agVersion;
+}
+
 export const ANTIGRAVITY_CONFIG = {
     base_url: 'https://daily-cloudcode-pa.googleapis.com',
-    user_agent: 'antigravity/1.19.5 windows/amd64'
+    get user_agent() {
+        return `antigravity/${_agVersion} windows/amd64`;
+    }
 };
 
 // Unleash 功能开关 Token

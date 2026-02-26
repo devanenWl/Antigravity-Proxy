@@ -1,9 +1,9 @@
 import { ANTIGRAVITY_CONFIG } from '../config.js';
 import { fingerprintFetch, fingerprintStreamFetch } from '../runtime/fingerprint-requester.js';
+import { refreshVersion, isVersionOutdatedText } from './versionFetcher.js';
 import fs from 'fs';
 
 const BASE_URL = ANTIGRAVITY_CONFIG.base_url;
-const USER_AGENT = ANTIGRAVITY_CONFIG.user_agent;
 const API_HOST = new URL(BASE_URL).host;
 
 /**
@@ -97,7 +97,7 @@ export async function streamChat(account, request, onData, onError, signal = nul
             method: 'POST',
             headers: {
                 'Host': API_HOST,
-                'User-Agent': USER_AGENT,
+                'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
                 'Transfer-Encoding': 'chunked',
                 'Authorization': `Bearer ${account.access_token}`,
                 'Content-Type': 'application/json',
@@ -139,6 +139,7 @@ export async function streamChat(account, request, onData, onError, signal = nul
         const decoder = new TextDecoder();
         let buffer = '';
         let eventDataLines = [];
+        let firstChunkChecked = false;
 
         const handleData = (data) => {
             const payload = String(data ?? '').trim();
@@ -183,7 +184,21 @@ export async function streamChat(account, request, onData, onError, signal = nul
                 break;
             }
 
-            buffer += decoder.decode(value, { stream: true });
+            const chunk = decoder.decode(value, { stream: true });
+
+            // 首 chunk 检测版本过期（上游返回 200 OK + 纯文本提示）
+            if (!firstChunkChecked) {
+                firstChunkChecked = true;
+                if (isVersionOutdatedText(chunk)) {
+                    reader.cancel().catch(() => {});
+                    await refreshVersion();
+                    const err = new Error(chunk.trim());
+                    err.versionOutdated = true;
+                    throw err;
+                }
+            }
+
+            buffer += chunk;
 
             // 按行处理
             const lines = buffer.split('\n');
@@ -372,7 +387,7 @@ export async function chat(account, request) {
         method: 'POST',
         headers: {
             'Host': API_HOST,
-            'User-Agent': USER_AGENT,
+            'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
             'Authorization': `Bearer ${account.access_token}`,
             'Content-Type': 'application/json',
             'Accept-Encoding': 'gzip'
@@ -407,14 +422,30 @@ export async function chat(account, request) {
         throw err;
     }
 
-    const data = await response.json();
+    const text = await response.text();
+
+    // 检测版本过期（上游返回 200 OK + 纯文本提示）
+    if (isVersionOutdatedText(text)) {
+        await refreshVersion();
+        const err = new Error(text.trim());
+        err.versionOutdated = true;
+        throw err;
+    }
+
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch {
+        throw new Error(`Unexpected response format: ${text.slice(0, 200)}`);
+    }
+
     const upstreamError = data?.error || data?.response?.error;
     if (upstreamError) {
         const message = upstreamError?.message || upstreamError?.error?.message || JSON.stringify(upstreamError);
         const err = new Error(message || 'Upstream returned an error');
         err.upstreamStatus = response.status;
         err.upstreamJson = upstreamError;
-        err.upstreamBody = JSON.stringify(data);
+        err.upstreamBody = text;
         throw err;
     }
     return data;
@@ -433,7 +464,7 @@ export async function countTokens(account, request) {
         method: 'POST',
         headers: {
             'Host': API_HOST,
-            'User-Agent': USER_AGENT,
+            'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
             'Authorization': `Bearer ${account.access_token}`,
             'Content-Type': 'application/json',
             'Accept-Encoding': 'gzip'
@@ -481,7 +512,7 @@ export async function fetchAvailableModels(account) {
         method: 'POST',
         headers: {
             'Host': API_HOST,
-            'User-Agent': USER_AGENT,
+            'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
             'Authorization': `Bearer ${account.access_token}`,
             'Content-Type': 'application/json',
             'Accept-Encoding': 'gzip'
@@ -508,7 +539,7 @@ export async function loadCodeAssist(account) {
         method: 'POST',
         headers: {
             'Host': API_HOST,
-            'User-Agent': USER_AGENT,
+            'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
             'Authorization': `Bearer ${account.access_token}`,
             'Content-Type': 'application/json',
             'Accept-Encoding': 'gzip'

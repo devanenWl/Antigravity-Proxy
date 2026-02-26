@@ -7,13 +7,11 @@
  */
 import crypto from 'crypto';
 import { fingerprintFetch } from '../runtime/fingerprint-requester.js';
-import { ANTIGRAVITY_CONFIG, UNLEASH_TOKENS } from '../config.js';
+import { UNLEASH_TOKENS, getAgVersion } from '../config.js';
 
 const UNLEASH_BASE = 'https://antigravity-unleash.goog';
 const UNLEASH_INTERVAL_MS = 60_000; // 60 秒
 const UNLEASH_JITTER_MS = 5_000;    // ±5 秒抖动
-
-const AG_VERSION = ANTIGRAVITY_CONFIG.user_agent.match(/antigravity\/([\d.]+)/)?.[1] || '1.18.3';
 // Frontend 端点使用 Electron GUI 版本号，与 Go CLI 版本不同
 const ELECTRON_VERSION = '1.107.0';
 const FULL_CHROME_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Antigravity/${ELECTRON_VERSION} Chrome/142.0.7444.175 Electron/39.2.3 Safari/537.36`;
@@ -92,7 +90,7 @@ function buildFrontEndBody(account) {
                 extensionVersion: '',
                 hasAnthropicModelAccess: 'false',
                 ide: 'antigravity',
-                ideVersion: AG_VERSION,
+                ideVersion: getAgVersion(),
                 installationId: account.session_id || crypto.randomUUID(),
                 language: 'UNSPECIFIED',
                 os: 'windows',

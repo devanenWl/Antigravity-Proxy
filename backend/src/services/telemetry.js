@@ -5,13 +5,11 @@
  * 参考：antigravity2api-nodejs/src/utils/recordCodeAssistMetrics.js
  */
 import crypto from 'crypto';
-import { ANTIGRAVITY_CONFIG } from '../config.js';
+import { ANTIGRAVITY_CONFIG, getAgVersion } from '../config.js';
 import { fingerprintFetch } from '../runtime/fingerprint-requester.js';
 
 const BASE_URL = ANTIGRAVITY_CONFIG.base_url;
-const USER_AGENT = ANTIGRAVITY_CONFIG.user_agent;
 const API_HOST = new URL(BASE_URL).host;
-const AG_VERSION = USER_AGENT.match(/antigravity\/([\d.]+)/)?.[1] || '1.18.3';
 const TELEMETRY_INTERVAL_MS = 5 * 60_000; // 5 分钟基准
 const TELEMETRY_JITTER_MS = 5 * 60_000;   // 额外 0~5 分钟随机
 
@@ -40,7 +38,7 @@ function buildMetrics(account, trajectoryId) {
         requestId: crypto.randomUUID(),
         metadata: {
             ideType: 'ANTIGRAVITY',
-            ideVersion: AG_VERSION,
+            ideVersion: getAgVersion(),
             platform: 'WINDOWS_AMD64'
         },
         metrics: [
@@ -65,7 +63,7 @@ function buildMetrics(account, trajectoryId) {
 function getMetricsHeaders(account) {
     return {
         'Host': API_HOST,
-        'User-Agent': USER_AGENT,
+        'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
         'Authorization': `Bearer ${account.access_token}`,
         'Content-Type': 'application/json',
         'Accept-Encoding': 'gzip'

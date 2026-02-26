@@ -13,6 +13,7 @@ import { resolveRuntimePath } from './runtime/paths.js';
 import { startUnleashScheduler } from './services/unleash.js';
 import { startAllHeartbeats } from './services/warmup.js';
 import { startTelemetryScheduler } from './services/telemetry.js';
+import { startVersionFetcher } from './services/versionFetcher.js';
 
 import openaiRoutes from './routes/openai.js';
 import anthropicRoutes from './routes/anthropic.js';
@@ -135,6 +136,9 @@ export async function startServer(options = {}) {
             }
         });
     });
+
+    // 启动版本自动获取
+    startVersionFetcher();
 
     // 启动定时任务
     startTokenRefreshScheduler();

@@ -6,14 +6,12 @@
  * 参考：antigravity2api-nodejs/src/utils/trajectory.js
  */
 import crypto from 'crypto';
-import { ANTIGRAVITY_CONFIG } from '../config.js';
+import { ANTIGRAVITY_CONFIG, getAgVersion } from '../config.js';
 import { fingerprintFetch } from '../runtime/fingerprint-requester.js';
 import { QA_PAIRS } from '../constants/qaPairs.js';
 
 const BASE_URL = ANTIGRAVITY_CONFIG.base_url;
-const USER_AGENT = ANTIGRAVITY_CONFIG.user_agent;
 const API_HOST = new URL(BASE_URL).host;
-const AG_VERSION = USER_AGENT.match(/antigravity\/([\d.]+)/)?.[1] || '1.18.3';
 
 // 模块级持久 deviceId（与 antigravity2api 一致，模块加载时生成一次）
 let deviceId = crypto.randomUUID();
@@ -108,7 +106,7 @@ function generateMetadata(account) {
         extensionPath: 'd:\\Antigravity\\Antigravity\\resources\\app\\extensions\\antigravity',
         hardware: 'amd64',
         ideName: 'antigravity',
-        ideVersion: AG_VERSION,
+        ideVersion: getAgVersion(),
         locale: 'en',
         os: 'windows',
         regionCode: 'US',
@@ -495,7 +493,7 @@ export async function sendTrajectoryAnalytics(account, model, requestId) {
             method: 'POST',
             headers: {
                 'Host': API_HOST,
-                'User-Agent': USER_AGENT,
+                'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
                 'Authorization': `Bearer ${account.access_token}`,
                 'Content-Type': 'application/json',
                 'Accept-Encoding': 'gzip'

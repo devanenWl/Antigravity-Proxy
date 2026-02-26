@@ -10,7 +10,6 @@ import { ANTIGRAVITY_CONFIG } from '../config.js';
 import { fingerprintFetch } from '../runtime/fingerprint-requester.js';
 
 const BASE_URL = ANTIGRAVITY_CONFIG.base_url;
-const USER_AGENT = ANTIGRAVITY_CONFIG.user_agent;
 const API_HOST = new URL(BASE_URL).host;
 const HEARTBEAT_INTERVAL_MS = 1_000;  // 1 秒（匹配真实客户端 setInterval(1000)）
 const HEARTBEAT_JITTER_MS = 50;       // ±50ms（模拟 JS setInterval 精度）
@@ -27,7 +26,7 @@ function randomDelay(minMs = 50, maxMs = 200) {
 function getHeaders(account) {
     return {
         'Host': API_HOST,
-        'User-Agent': USER_AGENT,
+        'User-Agent': ANTIGRAVITY_CONFIG.user_agent,
         'Authorization': `Bearer ${account.access_token}`,
         'Content-Type': 'application/json',
         'Accept-Encoding': 'gzip'
