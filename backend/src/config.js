@@ -16,7 +16,7 @@ export const OAUTH_CONFIG = {
 // Antigravity API 配置
 export const ANTIGRAVITY_CONFIG = {
     base_url: 'https://daily-cloudcode-pa.googleapis.com',
-    user_agent: 'antigravity/1.19.4 windows/amd64'
+    user_agent: 'antigravity/1.19.5 windows/amd64'
 };
 
 // Unleash 功能开关 Token
