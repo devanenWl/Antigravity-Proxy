@@ -151,7 +151,7 @@ export default async function geminiRoutes(fastify) {
     });
 
     // Gemini native endpoint (minimal): /v1beta/models/<model>:(generateContent|streamGenerateContent)
-    // 目前主要用于 gemini-3-pro-image，透传 generationConfig.imageConfig 等字段到上游。
+    // 目前主要用于 gemini-3.1-flash-image，透传 generationConfig.imageConfig 等字段到上游。
     fastify.post('/v1beta/models/*', {
         preHandler: verifyApiKey
     }, async (request, reply) => {
@@ -248,7 +248,7 @@ export default async function geminiRoutes(fastify) {
                     innerRequest.generationConfig.candidateCount = 1;
                 }
 
-                const requestType = model === 'gemini-3-pro-image' ? 'image_gen' : 'agent';
+                const requestType = model === 'gemini-3.1-flash-image' ? 'image_gen' : 'agent';
 
                 // Inject official system prompt (upstream may validate it)
                 // Skip for image generation model

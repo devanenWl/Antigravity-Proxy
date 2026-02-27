@@ -98,7 +98,7 @@ export const AVAILABLE_MODELS = [
     { id: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash Lite', provider: 'google', supportsImages: false, supportsThinking: false, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-3.1-pro-high', displayName: 'Gemini 3.1 Pro (High)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
     { id: 'gemini-3.1-pro-low', displayName: 'Gemini 3.1 Pro (Low)', provider: 'google', supportsImages: true, supportsThinking: true, maxTokens: 1048576, maxOutputTokens: 65535 },
-    { id: 'gemini-3-pro-image', displayName: 'Gemini 3 Pro Image', provider: 'google', supportsImages: true, supportsThinking: true },
+    { id: 'gemini-3.1-flash-image', displayName: 'Gemini 3.1 Flash Image', provider: 'google', supportsImages: true, supportsThinking: true },
     { id: 'claude-opus-4-6', displayName: 'Claude Opus 4.6', provider: 'anthropic', supportsImages: true, supportsThinking: false, maxTokens: 200000, maxOutputTokens: 64000 },
     { id: 'claude-opus-4-6-thinking', displayName: 'Claude Opus 4.6 (Thinking)', provider: 'anthropic', supportsImages: true, supportsThinking: true, maxTokens: 200000, maxOutputTokens: 64000 },
     { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', provider: 'anthropic', supportsImages: true, supportsThinking: false, maxTokens: 200000, maxOutputTokens: 64000 },
@@ -139,7 +139,7 @@ export const THINKING_MODELS = [
     'gemini-3-flash-thinking',
     'gemini-3.1-pro-high',
     'gemini-3.1-pro-low',
-    'gemini-3-pro-image',
+    'gemini-3.1-flash-image',
     'claude-opus-4-6-thinking',
     'claude-sonnet-4-6-thinking'
 ];
@@ -153,7 +153,7 @@ export function isThinkingModel(model) {
 // 判断模型是否是图像生成模型（不支持系统提示词，但支持思维链）
 export function isImageGenerationModel(model) {
     const m = String(model || '');
-    return m === 'gemini-3-pro-image' || m.includes('-image');
+    return m === 'gemini-3.1-flash-image' || m.includes('-image');
 }
 
 // 获取实际发送的模型名称
