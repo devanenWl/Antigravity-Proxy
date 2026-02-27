@@ -11,7 +11,7 @@ import {
 import { createRequestLog } from '../db/index.js';
 import { isThinkingModel, AVAILABLE_MODELS } from '../config.js';
 import { logModelCall } from '../services/modelLogger.js';
-import { isCapacityError, isAuthenticationError, parseResetAfterMs, SSE_HEADERS_ANTHROPIC } from '../utils/route-helpers.js';
+import { isCapacityError, isAuthenticationError, parseResetAfterMs, SSE_HEADERS_ANTHROPIC, buildErrorMessage } from '../utils/route-helpers.js';
 import { createAbortController, runChatWithFullRetry, runStreamChatWithFullRetry } from '../utils/request-handler.js';
 import { sendTrajectoryAnalytics } from '../services/trajectory.js';
 import { sendRequestMetrics } from '../services/telemetry.js';
@@ -155,12 +155,14 @@ export default async function anthropicRoutes(fastify) {
                 } catch (err) {
                     if (err?.account) account = err.account;
                     status = 'error';
-                    errorMessage = err.message;
+                    errorMessage = buildErrorMessage(err);
                     const errorEvent = {
                         type: 'error',
                         error: {
                             type: 'api_error',
-                            message: err.message
+                            message: err.message,
+                            ...(err.upstreamStatus ? { upstream_status: err.upstreamStatus } : {}),
+                            ...(err.upstreamJson ? { upstream_details: err.upstreamJson } : {})
                         }
                     };
                     streamEventsForLog.push({ event: 'error', data: errorEvent });
@@ -330,7 +332,7 @@ export default async function anthropicRoutes(fastify) {
         } catch (error) {
             if (error?.account) account = error.account;
             status = 'error';
-            errorMessage = error.message;
+            errorMessage = buildErrorMessage(error);
 
             const capacity = isCapacityError(error);
             const authError = isAuthenticationError(error);
@@ -356,7 +358,9 @@ export default async function anthropicRoutes(fastify) {
                 error: {
                     type: errorType,
                     message: error.message,
-                    ...(capacity && Number.isFinite(retryAfterMs) ? { retry_after_ms: retryAfterMs } : {})
+                    ...(capacity && Number.isFinite(retryAfterMs) ? { retry_after_ms: retryAfterMs } : {}),
+                    ...(error.upstreamStatus ? { upstream_status: error.upstreamStatus } : {}),
+                    ...(error.upstreamJson ? { upstream_details: error.upstreamJson } : {})
                 }
             };
             return reply.code(httpStatus).send(errorResponseForLog);

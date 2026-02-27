@@ -193,3 +193,14 @@ export const SSE_HEADERS_ANTHROPIC = Object.freeze({
     'Connection': 'keep-alive',
     'X-Accel-Buffering': 'no'
 });
+
+export function buildErrorMessage(err) {
+    let msg = err?.message || String(err);
+    if (err?.upstreamStatus) msg += ` [HTTP ${err.upstreamStatus}]`;
+    if (err?.upstreamJson) {
+        try { msg += ' ' + JSON.stringify(err.upstreamJson); } catch {}
+    } else if (err?.upstreamBody && err.upstreamBody !== msg.split(' [HTTP')[0]) {
+        msg += ' ' + String(err.upstreamBody).slice(0, 2000);
+    }
+    return msg;
+}

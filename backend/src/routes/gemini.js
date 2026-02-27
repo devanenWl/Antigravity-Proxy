@@ -7,7 +7,7 @@ import { streamChat, chat, countTokens, fetchAvailableModels } from '../services
 import { createRequestLog } from '../db/index.js';
 import { getMappedModel, getSafetySettings } from '../config.js';
 import { logModelCall } from '../services/modelLogger.js';
-import { isCapacityError, isAuthenticationError, parseResetAfterMs, SSE_HEADERS } from '../utils/route-helpers.js';
+import { isCapacityError, isAuthenticationError, parseResetAfterMs, SSE_HEADERS, buildErrorMessage } from '../utils/route-helpers.js';
 import { createAbortController, runChatWithFullRetry, runStreamChatWithFullRetry, runChatWithCapacityRetry, runStreamChatWithCapacityRetry } from '../utils/request-handler.js';
 import { buildUpstreamSystemInstruction } from '../services/converter/system-instruction.js';
 import { sendTrajectoryAnalytics } from '../services/trajectory.js';
@@ -333,8 +333,8 @@ export default async function geminiRoutes(fastify) {
                     } catch (err) {
                         if (err?.account) account = err.account;
                         status = 'error';
-                        errorMessage = err.message;
-                        const errorChunk = { error: { message: err.message, type: 'api_error' } };
+                        errorMessage = buildErrorMessage(err);
+                        const errorChunk = { error: { message: errorMessage, type: 'api_error' } };
                         errorResponseForLog = errorChunk;
                         if (wantsSse) {
                             reply.raw.write(`data: ${JSON.stringify(errorChunk)}\n\n`);
@@ -399,7 +399,7 @@ export default async function geminiRoutes(fastify) {
             } catch (error) {
                 if (error?.account) account = error.account;
                 status = 'error';
-                errorMessage = error.message;
+                errorMessage = buildErrorMessage(error);
 
                 const msg = error.message || '';
                 const capacity = isCapacityError(error);
@@ -424,7 +424,9 @@ export default async function geminiRoutes(fastify) {
                         message: error.message,
                         type: 'api_error',
                         code: errorCode,
-                        ...(capacity && Number.isFinite(retryAfterMs) ? { retry_after_ms: retryAfterMs } : {})
+                        ...(capacity && Number.isFinite(retryAfterMs) ? { retry_after_ms: retryAfterMs } : {}),
+                        ...(error.upstreamStatus ? { upstream_status: error.upstreamStatus } : {}),
+                        ...(error.upstreamJson ? { upstream_details: error.upstreamJson } : {})
                     }
                 };
                 return reply.code(httpStatus).send(errorResponseForLog);

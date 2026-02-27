@@ -1,4 +1,4 @@
-import { isCapacityError, isNonRetryableError, isAuthenticationError, isRefreshTokenInvalidError, parseResetAfterMs, sleep } from './route-helpers.js';
+import { isCapacityError, isNonRetryableError, isAuthenticationError, isRefreshTokenInvalidError, parseResetAfterMs, sleep, buildErrorMessage } from './route-helpers.js';
 import { withCapacityRetry, withFullRetry } from './retry-handler.js';
 import { RETRY_CONFIG } from '../config.js';
 import { forceRefreshToken } from '../services/tokenManager.js';
@@ -135,7 +135,7 @@ export async function runChatWithCapacityRetry({
                     sameRetry: null,
                     status: 'error',
                     latencyMs: Math.max(0, endedAt - startedAt),
-                    errorMessage: error?.message || String(error),
+                    errorMessage: buildErrorMessage(error),
                     startedAt,
                     createdAt: endedAt
                 });
@@ -208,7 +208,7 @@ export async function runChatWithFullRetry({
                 sameRetry: sameRetry ?? null,
                 status: 'error',
                 latencyMs: Math.max(0, endedAt - startedAt),
-                errorMessage: error?.message || String(error),
+                errorMessage: buildErrorMessage(error),
                 startedAt,
                 createdAt: endedAt
             });
@@ -349,7 +349,7 @@ export async function runStreamChatWithCapacityRetry({
                 sameRetry: null,
                 status: abortSignal?.aborted ? 'aborted' : 'error',
                 latencyMs: Math.max(0, endedAt - startedAt),
-                errorMessage: error?.message || String(error),
+                errorMessage: buildErrorMessage(error),
                 startedAt,
                 createdAt: endedAt
             });
@@ -436,7 +436,7 @@ export async function runStreamChatWithFullRetry({
                 sameRetry: sameRetry ?? null,
                 status: abortSignal?.aborted ? 'aborted' : 'error',
                 latencyMs: Math.max(0, endedAt - startedAt),
-                errorMessage: error?.message || String(error),
+                errorMessage: buildErrorMessage(error),
                 startedAt,
                 createdAt: endedAt
             });
